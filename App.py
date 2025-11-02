@@ -2,6 +2,7 @@
 """
 Dashboard Financeiro Caec
 Versão refatorada para uso com Streamlit Cloud Secrets.
+Estilo de KPI aprimorado usando recursos nativos do Streamlit (mínimo CSS).
 """
 
 from datetime import datetime, timedelta
@@ -35,12 +36,25 @@ COLORS = {
 # Altura padrão para a maioria dos gráficos
 DEFAULT_CHART_HEIGHT = 360
 
-# ---------- CSS (Fonte customizada) ----------
+# ---------- CSS (Fonte customizada - Mínimo necessário) ----------
 FONT_CSS = """
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root { font-family: 'Roboto Mono', monospace; }
   .stApp { font-family: 'Roboto Mono', monospace; }
+  
+  /* Ajuste de cor para os valores do st.metric */
+  /* Este é o ÚNICO bloco de CSS focado no KPI, e só muda a cor do VALOR */
+  [data-testid="stMetric"]:nth-child(1) [data-testid="stMetricValue"] {
+    color: #2ca02c; /* Receita - Verde */
+  }
+  [data-testid="stMetric"]:nth-child(2) [data-testid="stMetricValue"] {
+    color: #d62728; /* Despesa - Vermelho */
+  }
+  [data-testid="stMetric"]:nth-child(3) [data-testid="stMetricValue"] {
+    color: #636efa; /* Saldo - Azul */
+  }
+  /* O Streamlit gerencia a cor das setas (delta) automaticamente com base no delta_color */
 </style>
 """
 
@@ -624,29 +638,33 @@ def render_kpis(df: pd.DataFrame):
     
     c1, c2, c3 = st.columns(3)
     
-    # Usando st.metric para um visual padrão e limpo
+    # KPI 1: Receita Total (Seta/Cor normal, mas delta None para não mostrar)
     c1.metric(
-        label="Receita Total", 
+        label="Receita Total (Verde)", 
         value=money_fmt_br(receita), 
-        delta_color="normal"
-    )
-    c2.metric(
-        label="Despesa Total", 
-        value=money_fmt_br(abs(despesa)), 
-        delta_color="inverse"
-    )
-    c3.metric(
-        label="Saldo (Receita - Despesa)", 
-        value=money_fmt_br(saldo), 
-        delta="Positivo" if saldo >= 0 else "Negativo",
-        delta_color="normal" if saldo >= 0 else "inverse"
+        delta=None, # Não mostra seta nem delta
+        delta_color="normal" # Define a cor do delta como verde (embora invisível)
     )
     
-    # Alternativa com HTML customizado (se preferir as cores exatas)
-    # with c1:
-    #     st.markdown(f"<div style='font-size:12px;color:{COLORS['neutral']};text-transform:uppercase'>Receita</div>", unsafe_allow_html=True)
-    #     st.markdown(f"<div style='font-weight:700;color:{COLORS['receita']};font-size:20px'>{money_fmt_br(receita)}</div>", unsafe_allow_html=True)
-    # ... (similar para c2 e c3)
+    # KPI 2: Despesa Total (Seta/Cor inverse, mas delta None para não mostrar)
+    c2.metric(
+        label="Despesa Total (Vermelho)", 
+        value=money_fmt_br(abs(despesa)), 
+        delta=None, # Não mostra seta nem delta
+        delta_color="inverse" # Define a cor do delta como vermelho (embora invisível)
+    )
+    
+    # KPI 3: Saldo (Usa o próprio saldo como delta para forçar a seta e a cor)
+    # Valor é formatado para exibir, Delta é o valor real do saldo (float)
+    # Streamlit usa: delta > 0 -> normal (verde), delta < 0 -> inverse (vermelho)
+    # A cor azul é aplicada via CSS
+    c3.metric(
+        label="Saldo (Azul)", 
+        value=money_fmt_br(saldo), 
+        delta=saldo, # Usa o saldo para controlar a seta (para cima se positivo, para baixo se negativo)
+        delta_color="normal" if saldo >= 0 else "inverse", # Controla a cor da seta (verde para positivo, vermelho para negativo)
+        help="O delta indica se o Saldo é positivo (seta verde ⬆️) ou negativo (seta vermelha ⬇️)"
+    )
 
 def render_table(df: pd.DataFrame, key: str):
     """Renderiza a tabela de lançamentos usando st.dataframe."""
@@ -699,7 +717,7 @@ def main():
         initial_sidebar_state="expanded",
         menu_items={"About": "Dashboard Financeiro Caec © 2025 by Rick"}
     )
-    # Aplica o CSS
+    # Aplica o CSS (Apenas fonte e cor do valor)
     st.markdown(FONT_CSS, unsafe_allow_html=True)
     st.title("Dashboard Financeiro Caec")
 
