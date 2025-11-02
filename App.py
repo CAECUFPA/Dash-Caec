@@ -23,65 +23,49 @@ from sklearn.linear_model import LinearRegression
 
 # ---------- CONFIGURAÇÃO GERAL (NÃO-SENSÍVEL) ----------
 
-# Colunas esperadas na planilha. A ordem importa para a montagem do DataFrame.
 EXPECTED_COLS = ["DATA", "TIPO", "CATEGORIA", "DESCRIÇÃO", "VALOR", "OBSERVAÇÃO"]
 
-# Paleta de cores padrão para os gráficos
 COLORS = {
-    "receita": "#2ca02c",  # Verde
-    "despesa": "#d62728",  # Vermelho
-    "saldo": "#636efa",   # Azul
-    "neutral": "#6c757d",  # Cinza
+    "receita": "#2ca02c",
+    "despesa": "#d62728",
+    "saldo": "#636efa",
+    "neutral": "#6c757d",
 }
 
-# Altura padrão para a maioria dos gráficos
 DEFAULT_CHART_HEIGHT = 360
 
-# ---------- CSS (Fonte customizada e Estilo de KPI) ----------
-# CORREÇÃO CRÍTICA: Comentários inválidos foram substituídos por comentários 
-# de bloco CSS (/* ... */) válidos para evitar exposição na UI.
 KPI_VALUE_COLOR_CSS = """
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root { font-family: 'Roboto Mono', monospace; }
   .stApp { font-family: 'Roboto Mono', monospace; }
   
-  /* Ajuste de cor para os valores do st.metric */
   [data-testid="stMetric"]:nth-child(1) [data-testid="stMetricValue"] {
-    color: #2ca02c; /* Receita - Verde */
+    color: #2ca02c;
   }
   [data-testid="stMetric"]:nth-child(2) [data-testid="stMetricValue"] {
-    color: #d62728; /* Despesa - Vermelho */
+    color: #d62728;
   }
   [data-testid="stMetric"]:nth-child(3) [data-testid="stMetricValue"] {
-    color: #636efa; /* Saldo - Azul */
+    color: #636efa;
   }
 
-  /* Hack para forçar a seta do delta a aparecer mesmo com delta=None/"" */
-  /* Remove o espaço reservado para o texto do delta se ele for vazio */
   [data-testid="stMetricDelta"] { 
     display: flex; 
     align-items: center;
     justify-content: flex-end;
   }
   [data-testid="stMetricDelta"] > div {
-    min-width: 1em; /* Garante que o container da seta tenha algum tamanho */
+    min-width: 1em;
     text-align: right;
   }
-  /* Remove o texto quando o delta é uma string vazia */
   [data-testid="stMetricDelta"] > div:empty {
     display: none;
   }
 </style>
 """
 
-# ---------- UTILITÁRIOS DE FORMATAÇÃO ----------
-
 def parse_val_str_to_float(val) -> float:
-    """
-    Converte uma string de moeda (ex: "R$ 1.234,56" ou "(1.234,56)")
-    para um número float. Trata valores negativos (parênteses ou sinal).
-    """
     if pd.isna(val):
         return 0.0
     s = str(val).strip()
@@ -93,7 +77,6 @@ def parse_val_str_to_float(val) -> float:
         neg = True
         s = s.strip("()-")
         
-    # Limpa a string de formatação monetária
     s = s.replace("R$", "").replace(" ", "").replace(".", "").replace(",", ".")
     
     try:
@@ -104,51 +87,33 @@ def parse_val_str_to_float(val) -> float:
     return -abs(v) if neg else abs(v)
 
 def money_fmt_br(value: float) -> str:
-    """Formata um float para o padrão monetário brasileiro (R$ X.XXX,XX)."""
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-# ---------- CONEXÃO GOOGLE SHEETS (via st.secrets) ----------
 
 @st.cache_resource(ttl=600)
 def get_gspread_client() -> Optional[GSpreadClient]:
-    """
-    Autoriza e retorna um cliente gspread usando credenciais do st.secrets.
-    Usa cache de recurso para evitar re-autenticações desnecessárias.
-    """
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     try:
-        # st.secrets["gcp_service_account"] deve conter o dicionário do JSON
         creds_dict = st.secrets["gcp_service_account"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scopes)
         return gspread.authorize(creds)
-    except Exception as e:
-        # st.error(f"Erro ao carregar credenciais do Google: {e}") # Comentado para não poluir
+    except Exception:
         st.warning("Verifique se o secrets.toml está configurado corretamente com a [gcp_service_account].")
         return None
 
-# Não cacheados
 def load_sheet_values(client: GSpreadClient) -> List[List[str]]:
-    """Carrega todos os valores da planilha."""
     if not client:
         return []
-        
     try:
         spreadsheet_name = st.secrets["SPREADSHEET_NAME"]
         worksheet_index = st.secrets["WORKSHEET_INDEX"]
-        
         sh = client.open(spreadsheet_name)
         ws = sh.get_worksheet(worksheet_index)
         return ws.get_all_values()
-        
     except Exception as e:
         st.error(f"Erro ao acessar a planilha. Verifique o nome/permissões: {e}")
         return []
 
-# Não cacheados, apenas prepara o DF
 def build_dataframe(values: List[List[str]]) -> Tuple[pd.DataFrame, bool]:
-    """
-    Constrói um DataFrame Pandas e retorna o status do cabeçalho.
-    """
     if not values or len(values) < 1:
         return pd.DataFrame(columns=EXPECTED_COLS), False
         
@@ -156,45 +121,27 @@ def build_dataframe(values: List[List[str]]) -> Tuple[pd.DataFrame, bool]:
     body = values[1:] if len(values) > 1 else []
     
     header_mismatch = False
-    
-    # 1. Verifica se todos os cabeçalhos esperados estão presentes
     if all(col in header for col in EXPECTED_COLS):
-        # Cria o DF e seleciona as colunas na ordem correta
         df = pd.DataFrame(body, columns=header)[EXPECTED_COLS].copy()
     else:
-        # 2. Se o cabeçalho não bater, força a estrutura e marca o mismatch
         header_mismatch = True
-        
-        max_len = max(len(row) for row in body) if body else 0
+        max_len = max((len(row) for row in body), default=0)
         target_len = max(max_len, len(EXPECTED_COLS))
-        
         padded = [row + [""] * max(0, target_len - len(row)) for row in body]
-        
-        # Cria um DF forçado com as colunas esperadas
         df = pd.DataFrame(padded, columns=EXPECTED_COLS)
         
     return df, header_mismatch
 
-# ---------- PREPROCESSAMENTO DOS DADOS (LIMPEZA ROBUSTA) ----------
-
 def preprocess_df(df_raw: pd.DataFrame) -> pd.DataFrame:
-    """Aplica a limpeza e transformação principal no DataFrame."""
     df = df_raw.copy()
-    
-    # 1. Converter Datas (essencial)
     df["DATA"] = pd.to_datetime(df["DATA"], dayfirst=True, errors="coerce")
     df = df.dropna(subset=["DATA"]).reset_index(drop=True)
     
-    # 2. Converter Valores
     df["VALOR_NUM"] = df["VALOR"].apply(parse_val_str_to_float)
     
-    # 3. Limpar e preencher Tipo (Receita/Despesa)
     df["TIPO"] = df["TIPO"].fillna("").astype(str).str.strip()
     mask_empty_tipo = df["TIPO"] == ""
-    # Infere o tipo pelo valor se estiver vazio
     df.loc[mask_empty_tipo, "TIPO"] = df.loc[mask_empty_tipo, "VALOR_NUM"].apply(lambda v: "Despesa" if v < 0 else "Receita")
-    
-    # 4. Limpar e preencher NAs textuais (LIMPEZA CRÍTICA DE CATEGORIA)
     
     df["CATEGORIA"] = df["CATEGORIA"].fillna("").astype(str).str.strip()
     df["DESCRIÇÃO"] = df["DESCRIÇÃO"].fillna("").astype(str).str.strip()
@@ -214,34 +161,25 @@ def preprocess_df(df_raw: pd.DataFrame) -> pd.DataFrame:
     df.loc[df["DESCRIÇÃO"] == "", "DESCRIÇÃO"] = "N/D"
     df.loc[df["OBSERVAÇÃO"] == "", "OBSERVAÇÃO"] = "N/D"
     
-    # 5. Ordenar e calcular saldo acumulado
     df = df.sort_values("DATA").reset_index(drop=True)
     df["Saldo Acumulado"] = df["VALOR_NUM"].cumsum()
-    
-    # 6. Coluna auxiliar para filtro de mês
     df["year_month"] = df["DATA"].dt.to_period("M").astype(str)
     
     return df
 
 @st.cache_data(ttl=600)
 def get_processed_data(df_raw: pd.DataFrame) -> pd.DataFrame:
-    """Processa o DF RAW. O DF RAW é passado via uma função não-cahceada."""
     if df_raw.empty:
         return df_raw
     return preprocess_df(df_raw)
 
-
-# ---------- FUNÇÕES DE PLOTAGEM (Gráficos) (MANTIDAS) ----------
-
 def _get_empty_fig(text: str = "Sem dados") -> go.Figure:
-    """Retorna uma figura Plotly vazia com uma anotação central."""
     fig = go.Figure()
     fig.add_annotation(text=text, xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     return fig
 
 def plot_saldo_acumulado(df: pd.DataFrame) -> go.Figure:
-    """Plota a evolução do Saldo Acumulado com linha de tendência."""
     if df.empty:
         return _get_empty_fig()
         
@@ -284,7 +222,6 @@ def plot_saldo_acumulado(df: pd.DataFrame) -> go.Figure:
     return fig
 
 def plot_fluxo_diario(df: pd.DataFrame) -> go.Figure:
-    """Plota o fluxo de caixa diário (barras positivas/negativas)."""
     if df.empty:
         return _get_empty_fig()
         
@@ -305,7 +242,6 @@ def plot_fluxo_diario(df: pd.DataFrame) -> go.Figure:
     return fig
 
 def plot_categoria_barras(df: pd.DataFrame, kind: str = "Receita") -> go.Figure:
-    """Plota um gráfico de barras por categoria (Receita ou Despesa)."""
     assert kind in ("Receita", "Despesa")
     
     if kind == "Receita":
@@ -331,7 +267,6 @@ def plot_categoria_barras(df: pd.DataFrame, kind: str = "Receita") -> go.Figure:
     return fig
 
 def plot_pie_composicao(df: pd.DataFrame, kind: str = "Receita") -> go.Figure:
-    """Plota um gráfico de pizza (donut) da composição de Receita/Despesa."""
     if kind == "Receita":
         series = df[df["VALOR_NUM"] > 0].groupby("CATEGORIA")["VALOR_NUM"].sum()
     else:
@@ -357,7 +292,6 @@ def plot_pie_composicao(df: pd.DataFrame, kind: str = "Receita") -> go.Figure:
     return fig
 
 def plot_bubble_transacoes(df: pd.DataFrame) -> go.Figure:
-    """Plota um gráfico de bolhas de todas as transações (Valor vs Data)."""
     if df.empty:
         return _get_empty_fig("Sem transações")
         
@@ -382,7 +316,6 @@ def plot_bubble_transacoes(df: pd.DataFrame) -> go.Figure:
     return fig
 
 def prepare_ohlc_period(df: pd.DataFrame, freq: str = "D") -> pd.DataFrame:
-    """Agrupa os dados de transações em formato OHLC."""
     if df.empty:
         return pd.DataFrame()
         
@@ -418,9 +351,7 @@ def prepare_ohlc_period(df: pd.DataFrame, freq: str = "D") -> pd.DataFrame:
     return ohlc
 
 def plot_candlestick(df: pd.DataFrame, freq: str = "D") -> go.Figure:
-    """Plota um gráfico Candlestick (OHLC) e um gráfico de Volume."""
     ohlc = prepare_ohlc_period(df, freq)
-    
     if ohlc.empty:
         return _get_empty_fig("Sem dados para candlestick")
 
@@ -469,7 +400,6 @@ def plot_candlestick(df: pd.DataFrame, freq: str = "D") -> go.Figure:
     return fig
 
 def plot_monthly_heatmap(df: pd.DataFrame) -> go.Figure:
-    """Plota um heatmap da soma de valores por Dia do Mês vs. Mês."""
     if df.empty:
         return _get_empty_fig()
         
@@ -498,7 +428,6 @@ def plot_monthly_heatmap(df: pd.DataFrame) -> go.Figure:
     return fig
 
 def plot_boxplot_by_category(df: pd.DataFrame) -> go.Figure:
-    """Plota um boxplot do valor absoluto das transações por categoria."""
     if df.empty:
         return _get_empty_fig()
         
@@ -520,10 +449,7 @@ def plot_boxplot_by_category(df: pd.DataFrame) -> go.Figure:
     fig.update_xaxes(tickangle=-45)
     return fig
 
-# ---------- SIDEBAR (Filtros e Controles) ----------
-
 def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
-    """Renderiza a barra lateral com os filtros e controles."""
     st.sidebar.title("Dashboard Financeiro Caec")
     st.sidebar.markdown("---")
 
@@ -591,25 +517,22 @@ def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
 
     st.sidebar.markdown("---")
     
-    # 4. Botão de Limpar Cache
     if st.sidebar.button("Limpar cache de dados", key="sb_clear_cache"):
         st.cache_data.clear()
         st.cache_resource.clear()
         st.sidebar.success("Cache limpo! O app recarregará os dados.")
 
     st.sidebar.markdown("---")
-    # Texto de rodapé (CAEC 2025 removido daqui)
     st.sidebar.caption("Criado e administrado pela diretoria de Administração Comercial e Financeiro - by Rick")
 
     return page, filters
 
 def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
-    """Aplica o dicionário de filtros ao DataFrame principal."""
     f = df.copy()
     
     if filters.get("mode") == "range":
         f = f[(f["DATA"] >= filters["date_from"]) & (f["DATA"] <= filters["date_to"])]
-    else: 
+    else:
         month = filters.get("month", "Todos")
         if month and month != "Todos":
             f = f[f["year_month"] == month]
@@ -620,29 +543,15 @@ def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
         
     return f.reset_index(drop=True)
 
-# ---------- COMPONENTES DE UI (KPIs e Tabelas) ----------
-
 def render_kpis(df: pd.DataFrame):
-    """Renderiza os 3 KPIs principais: Receita, Despesa e Saldo."""
     receita = df.loc[df["VALOR_NUM"] > 0, "VALOR_NUM"].sum()
     despesa = df.loc[df["VALOR_NUM"] < 0, "VALOR_NUM"].sum()
     saldo = receita + despesa
     
     c1, c2, c3 = st.columns(3)
     
-    c1.metric(
-        label="Receita Total", 
-        value=money_fmt_br(receita), 
-        delta="", 
-        delta_color="normal" 
-    )
-    
-    c2.metric(
-        label="Despesa Total", 
-        value=money_fmt_br(abs(despesa)), 
-        delta="", 
-        delta_color="inverse" 
-    )
+    c1.metric(label="Receita Total", value=money_fmt_br(receita), delta="", delta_color="normal" )
+    c2.metric(label="Despesa Total", value=money_fmt_br(abs(despesa)), delta="", delta_color="inverse" )
     
     delta_value_for_arrow = 0.0
     if saldo > 0:
@@ -650,15 +559,9 @@ def render_kpis(df: pd.DataFrame):
     elif saldo < 0:
         delta_value_for_arrow = -1.0
 
-    c3.metric(
-        label="Saldo (Receita - Despesa)", 
-        value=money_fmt_br(saldo), 
-        delta="", 
-        delta_color="normal" if delta_value_for_arrow >= 0 else "inverse",
-    )
+    c3.metric(label="Saldo (Receita - Despesa)", value=money_fmt_br(saldo), delta="", delta_color="normal" if delta_value_for_arrow >= 0 else "inverse")
 
 def render_table(df: pd.DataFrame, key: str):
-    """Renderiza a tabela de lançamentos usando st.dataframe."""
     if df.empty:
         st.info("Sem lançamentos para mostrar com os filtros atuais.")
         return
@@ -688,16 +591,10 @@ def render_table(df: pd.DataFrame, key: str):
     )
 
 def _prepare_export_csv(df: pd.DataFrame) -> str:
-    """Prepara o DataFrame para exportação e o converte para CSV."""
     export_df = df[["DATA","TIPO","CATEGORIA","DESCRIÇÃO","VALOR","OBSERVAÇÃO"]]
     return export_df.to_csv(index=False, encoding="utf-8-sig")
 
-# ---------- FUNÇÃO PRINCIPAL (MAIN) ----------
-
 def main():
-    """Função principal que executa o aplicativo Streamlit."""
-    
-    # --- Configuração da Página ---
     st.set_page_config(
         page_title="Dashboard Financeiro Caec", 
         layout="wide", 
@@ -705,44 +602,33 @@ def main():
         menu_items={"About": "Dashboard Financeiro Caec © 2025"}
     )
     
-    # Aplica o CSS (Resolve o problema do CSS exposto na UI)
     st.markdown(KPI_VALUE_COLOR_CSS, unsafe_allow_html=True)
     st.title("Dashboard Financeiro Caec")
 
-    # --- Carregamento de Dados (CORREÇÃO DO AVISO AMARELO) ---
     client = get_gspread_client()
     if not client:
-        # Se falhar a conexão, exibe a sidebar e encerra
         sidebar_filters_and_controls(pd.DataFrame(columns=EXPECTED_COLS)) 
         return
         
-    # Carrega os valores brutos e checa o cabeçalho (NÃO CACHEADO)
     values = load_sheet_values(client)
     df_raw, header_mismatch = build_dataframe(values)
     
-    # Exibe o aviso *aqui* para que ele apareça somente após o carregamento, 
-    # se o cabeçalho não bater.
     if header_mismatch:
         st.warning("Cabeçalho da planilha não corresponde ao esperado. Tentando carregar mesmo assim.")
     
-    # Processa os dados usando o cache, passando o DF RAW.
     df = get_processed_data(df_raw)
 
     if df.empty:
         st.warning("Planilha vazia ou erro ao importar dados. Verifique a planilha ou as credenciais nos Secrets.")
-        # Renderiza a sidebar mesmo vazia para permitir a limpeza de cache.
         sidebar_filters_and_controls(pd.DataFrame(columns=EXPECTED_COLS))
         return
 
-    # --- Sidebar e Filtros ---
     page, filters = sidebar_filters_and_controls(df) 
     df_filtered = apply_filters(df, filters)
 
-    # --- KPIs ---
     render_kpis(df_filtered)
     st.markdown("---")
 
-    # --- Renderização de Página ---
     if page == "Resumo Financeiro":
         st.subheader("Evolução do Saldo Acumulado")
         fig_saldo = plot_saldo_acumulado(df_filtered)
@@ -765,7 +651,7 @@ def main():
             key="download_resumo"
         )
 
-    else: # page == "Dashboard Detalhado"
+    else:
         tab_normais, tab_avancados = st.tabs(["📊 Gráficos Principais", "📈 Gráficos Avançados"])
 
         with tab_normais:
@@ -837,7 +723,6 @@ def main():
             key="download_full"
         )
 
-    # --- Rodapé ---
     st.markdown("---")
     st.markdown(
         "<div style='font-size:12px;color:gray;text-align:center'>"
@@ -846,6 +731,5 @@ def main():
         unsafe_allow_html=True
     )
 
-# Ponto de entrada padrão para execução do script
 if __name__ == "__main__":
     main()
