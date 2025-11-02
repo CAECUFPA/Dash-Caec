@@ -1,5 +1,5 @@
 """
-Dashboard Financeiro Caec — Versão FINAL/CORRIGIDA: Tipografia, Blueprint e Layout OK.
+Dashboard Financeiro Caec — Versão FINAL/CORRIGIDA: Tipografia, Blueprint Transparente e Layout OK.
 Paleta institucional e fontes aplicadas conforme o manual de identidade.
 """
 
@@ -14,37 +14,41 @@ from plotly.subplots import make_subplots
 import streamlit as st
 from sklearn.linear_model import LinearRegression
 
-# Importações de gspread e oauth2client (necessárias para o código real)
+# Google Sheets dependencies (assumir instaladas no ambiente)
 try:
     import gspread
     from gspread.client import Client as GSpreadClient
     from oauth2client.service_account import ServiceAccountCredentials
 except ImportError:
-    # Cria classes mock para o script rodar mesmo sem as libs instaladas/configuradas
+    # Classes Mock para garantir que o script não quebre por falta de dependências externas
     class GSpreadClient: pass
     class ServiceAccountCredentials:
         @staticmethod
         def from_json_keyfile_dict(a, b): return None
 
-# -------------------- CONFIGURAÇÃO GERAL E CSS REVISADO --------------------
+# -------------------- CONFIGURAÇÃO GERAL E CSS CORRIGIDO --------------------
 
 EXPECTED_COLS = ["DATA", "TIPO", "CATEGORIA", "DESCRIÇÃO", "VALOR", "OBSERVAÇÃO"]
 
+# Institucional + cores operacionais
 INSTITUTIONAL = {
     "azul": "#042b51",    # base institucional (Títulos)
     "amarelo": "#f6d138", # acento institucional (Tendência)
     "branco": "#ffffff",
     "preto": "#231f20"
 }
+# cores para KPIs (mantemos receita verde e despesa vermelho e saldo azul)
 COLORS = {
-    "receita": "#2ca02c",
-    "despesa": "#d62728",
-    "saldo": "#1f77b4",
+    "receita": "#2ca02c",  # verde
+    "despesa": "#d62728",  # vermelho
+    "saldo": "#1f77b4",    # azul para saldo
     "trend": INSTITUTIONAL["amarelo"],
     "neutral": "#6c757d",
 }
+
 DEFAULT_CHART_HEIGHT = 360
 
+# NOVO BLUEPRINT: Usando RGBA de baixa opacidade para linhas (SEM OPACITY GLOBAL NO .stApp)
 BLUEPRINT_BACKGROUND_CSS = """
   background-image:
     linear-gradient(0deg, var(--bg-line-rgba-01) 1px, transparent 1px),
@@ -53,7 +57,6 @@ BLUEPRINT_BACKGROUND_CSS = """
   background-position: -1px -1px;
 """
 
-# NOVO: Inclusão da importação das fontes via Google Fonts no CSS
 MINIMAL_CSS = f"""
 <style>
 /* ------------------------------------------------------------------- */
@@ -62,7 +65,7 @@ MINIMAL_CSS = f"""
 @import url('https://fonts.googleapis.com/css2?family=Anton&family=Six+Caps&family=League+Spartan&family=Open+Sans:wght@400;700&display=swap');
 
 /* ------------------------------------------------------------------- */
-/* 1. VARIÁVEIS DE TEMA E CORES */
+/* 1. VARIÁVEIS DE TEMA (CORRIGIDAS PARA RGBA) */
 /* ------------------------------------------------------------------- */
 
 :root {{
@@ -78,7 +81,7 @@ MINIMAL_CSS = f"""
   --text-main: {INSTITUTIONAL['preto']};
   --text-secondary: #6c757d;
   --card-border: #e0e0e0;
-  --bg-line-rgba-01: rgba(224, 224, 224, 0.1); 
+  --bg-line-rgba-01: rgba(224, 224, 224, 0.1); /* Linhas CLARAS muito sutis */
 }}
 
 /* Modo ESCURO */
@@ -89,7 +92,7 @@ MINIMAL_CSS = f"""
         --text-main: #e6e6e6;
         --text-secondary: #bfc9d3;
         --card-border: #2c3641;
-        --bg-line-rgba-01: rgba(44, 54, 65, 0.15); 
+        --bg-line-rgba-01: rgba(44, 54, 65, 0.15); /* Linhas ESCURAS muito sutis */
     }}
 }}
 
@@ -111,7 +114,7 @@ h1, h2, h3, h4, .st-emotion-cache-e67m5x, .kpi-value {{
     color: var(--caec-azul);
 }}
 
-/* Sidebar - Fundo transparente e sem borda */
+/* Sidebar - Fundo transparente (CORRIGIDO) e sem borda */
 .st-emotion-cache-vk34a3, .st-emotion-cache-1cypk8n {{
     background-color: transparent !important;
     border-right: none !important; 
@@ -124,7 +127,7 @@ h1, h2, h3, h4, .st-emotion-cache-e67m5x, .kpi-value {{
 }}
 
 /* ------------------------------------------------------------------- */
-/* 3. ESTILOS DE KPI (ALTURA IGUAL) */
+/* 3. ESTILOS DE KPI (MANTIDOS) */
 /* ------------------------------------------------------------------- */
 
 .kpi-card {{
@@ -140,7 +143,6 @@ h1, h2, h3, h4, .st-emotion-cache-e67m5x, .kpi-value {{
   justify-content: space-between; 
 }}
 .kpi-label {{ font-size: 13px; color: var(--text-secondary); margin-bottom:auto; }}
-/* .kpi-value usa as fontes de destaque */
 .kpi-value {{ font-size: 26px; font-weight:700; margin-top: 4px; }}
 .kpi-delta {{ font-size:12px; color:var(--text-secondary); margin-top: auto; display:flex; gap:8px; align-items:center; }}
 .kpi-arrow-up {{ color: var(--kpi-receita); font-weight:700; }}
@@ -159,56 +161,133 @@ footer {{ color: var(--text-secondary); text-align:center; padding-top:10px; }}
 st.set_page_config(page_title="Dashboard Financeiro Caec", layout="wide", initial_sidebar_state="expanded",
                    menu_items={"About": "Dashboard Financeiro Caec © 2025"})
 
-# -------------------- UTILITÁRIOS (FUNÇÕES ESSENCIAIS) --------------------
+# -------------------- UTILITÁRIOS (MANTIDOS) --------------------
 
 def parse_val_str_to_float(val) -> float:
-    if pd.isna(val) or val == "": return 0.0
+    if pd.isna(val) or val == "":
+        return 0.0
     s = str(val).strip()
-    neg = (s.startswith("(") and s.endswith(")")) or s.startswith("-")
-    s = s.strip("()-").replace("R$", "").replace(" ", "").replace(".", "").replace(",", ".")
-    try: v = float(s)
-    except Exception: return 0.0
+    neg = False
+    if (s.startswith("(") and s.endswith(")")) or s.startswith("-"):
+        neg = True
+        s = s.strip("()-")
+    s = s.replace("R$", "").replace(" ", "").replace(".", "").replace(",", ".")
+    try:
+        v = float(s)
+    except Exception:
+        return 0.0
     return -abs(v) if neg else abs(v)
 
 def money_fmt_br(value: float) -> str:
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def get_category_color_map(df: pd.DataFrame) -> Dict[str, str]:
-    if df is None or df.empty: return {}
+    if df is None or df.empty:
+        return {}
     cats = sorted(df["CATEGORIA"].dropna().unique())
-    base = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"]
+    base = [
+        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b",
+        "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
+    ]
     palette = [INSTITUTIONAL["azul"], INSTITUTIONAL["amarelo"]] + base
     colors = [palette[i % len(palette)] for i in range(len(cats))]
     return {cat: colors[i] for i, cat in enumerate(cats)}
 
-# -------------------- GOOGLE SHEETS / PREPROCESSAMENTO (MOCKADAS) --------------------
+# -------------------- GOOGLE SHEETS / PREPROCESSAMENTO (MANTIDOS) --------------------
 
 @st.cache_resource(ttl=600)
 def get_gspread_client() -> Optional[GSpreadClient]:
-    # Lógica de conexão real omitida.
-    return None
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    try:
+        creds_dict = st.secrets["gcp_service_account"]
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scopes)
+        return gspread.authorize(creds)
+    except Exception:
+        return None
+
+def load_sheet_values(client: GSpreadClient) -> List[List[str]]:
+    if not client:
+        return []
+    try:
+        spreadsheet_name = st.secrets["SPREADSHEET_NAME"]
+        worksheet_index = int(st.secrets.get("WORKSHEET_INDEX", 0))
+        sh = client.open(spreadsheet_name)
+        ws = sh.get_worksheet(worksheet_index)
+        return ws.get_all_values()
+    except Exception as e:
+        return []
+
+def build_dataframe(values: List[List[str]]) -> Tuple[pd.DataFrame, bool]:
+    if not values or len(values) < 2:
+        return pd.DataFrame(columns=EXPECTED_COLS), False
+    header = [str(h).strip() for h in values[1]]
+    body = values[2:] if len(values) > 2 else []
+    header_mismatch = False
+    if all(col in header for col in EXPECTED_COLS):
+        df = pd.DataFrame(body, columns=header)[EXPECTED_COLS].copy()
+    else:
+        header_mismatch = True
+        max_len = max((len(row) for row in body), default=0)
+        target_len = max(max_len, len(EXPECTED_COLS))
+        padded = [row + [""] * max(0, target_len - len(row)) for row in body]
+        if padded:
+            df = pd.DataFrame(padded, columns=EXPECTED_COLS)
+        else:
+            df = pd.DataFrame(columns=EXPECTED_COLS)
+    return df, header_mismatch
+
+def preprocess_df(df_raw: pd.DataFrame) -> pd.DataFrame:
+    df = df_raw.copy()
+    df["DATA"] = pd.to_datetime(df["DATA"], dayfirst=True, errors="coerce")
+    df = df.dropna(subset=["DATA"]).reset_index(drop=True)
+    df["VALOR_NUM"] = df["VALOR"].apply(parse_val_str_to_float)
+    df["TIPO"] = df["TIPO"].fillna("").astype(str).str.strip()
+    mask_empty_tipo = df["TIPO"] == ""
+    df.loc[mask_empty_tipo, "TIPO"] = df.loc[mask_empty_tipo, "VALOR_NUM"].apply(lambda v: "Despesa" if v < 0 else "Receita")
+    mask_receita = df["TIPO"].str.contains("Receita", case=False, na=False)
+    mask_despesa = df["TIPO"].str.contains("Despesa", case=False, na=False)
+    df.loc[mask_receita, "VALOR_NUM"] = abs(df.loc[mask_receita, "VALOR_NUM"])
+    df.loc[mask_despesa, "VALOR_NUM"] = -abs(df.loc[mask_despesa, "VALOR_NUM"])
+    df["CATEGORIA"] = df["CATEGORIA"].fillna("").astype(str).str.strip()
+    df["DESCRIÇÃO"] = df["DESCRIÇÃO"].fillna("").astype(str).str.strip()
+    df["OBSERVAÇÃO"] = df["OBSERVAÇÃO"].fillna("").astype(str).str.strip()
+    def is_mostly_numeric_or_empty_category(s):
+        s = str(s)
+        if s == "": return True
+        if s.isdigit() and len(s) < 5: return True
+        return False
+    mask_invalid_cat = df["CATEGORIA"].apply(is_mostly_numeric_or_empty_category)
+    df.loc[mask_invalid_cat, "CATEGORIA"] = "NÃO CATEGORIZADO"
+    df.loc[df["DESCRIÇÃO"] == "", "DESCRIÇÃO"] = "N/D"
+    df.loc[df["OBSERVAÇÃO"] == "", "OBSERVAÇÃO"] = "N/D"
+    df = df.sort_values("DATA").reset_index(drop=True)
+    df["Saldo Acumulado"] = df["VALOR_NUM"].cumsum()
+    df["year_month"] = df["DATA"].dt.to_period("M").astype(str)
+    return df
 
 @st.cache_data(ttl=600)
 def load_and_preprocess_data() -> Tuple[pd.DataFrame, bool]:
-    # Use dados Mock se a conexão falhar ou para demonstração.
-    mock_data = {
-        "DATA": [datetime.now() - timedelta(days=d) for d in range(60)] * 2,
-        "TIPO": ["Receita"] * 60 + ["Despesa"] * 60,
-        "CATEGORIA": ["Mensalidade", "Marketing", "Evento", "Aluguel"] * 30,
-        "DESCRIÇÃO": [f"Item {i}" for i in range(120)],
-        "VALOR": [f"{1000 * (1 if i % 2 == 0 else -1)}" for i in range(120)],
-        "OBSERVAÇÃO": ["N/D"] * 120,
-    }
-    df_full = pd.DataFrame(mock_data)
-    df_full["DATA"] = pd.to_datetime(df_full["DATA"])
-    df_full["VALOR_NUM"] = df_full["VALOR"].apply(parse_val_str_to_float)
-    df_full["VALOR_NUM"] = df_full.apply(lambda row: abs(row["VALOR_NUM"]) if row["TIPO"] == "Receita" else -abs(row["VALOR_NUM"]), axis=1)
-    df_full["CATEGORIA"] = df_full["CATEGORIA"].fillna("NÃO CATEGORIZADO")
-    df_full["Saldo Acumulado"] = df_full["VALOR_NUM"].cumsum()
-    df_full["year_month"] = df_full["DATA"].dt.to_period("M").astype(str)
-    return df_full.sort_values("DATA").reset_index(drop=True), False
+    client = get_gspread_client()
+    if not client:
+        # Mock data se a conexão falhar ou credenciais ausentes
+        mock_data = {
+            "DATA": [datetime.now() - timedelta(days=d) for d in range(60)] * 2,
+            "TIPO": ["Receita"] * 60 + ["Despesa"] * 60,
+            "CATEGORIA": ["Mensalidade", "Marketing", "Evento", "Aluguel"] * 30,
+            "DESCRIÇÃO": [f"Item {i}" for i in range(120)],
+            "VALOR": [f"{1000 * (1 if i % 2 == 0 else -1)}" for i in range(120)],
+            "OBSERVAÇÃO": ["N/D"] * 120,
+        }
+        df_full = preprocess_df(pd.DataFrame(mock_data))
+        return df_full, False
 
-# -------------------- PLOTS (FUNÇÕES ESSENCIAIS) --------------------
+    df_raw, header_mismatch = build_dataframe(load_sheet_values(client))
+    if df_raw.empty:
+        return df_raw, header_mismatch
+    df_processed = preprocess_df(df_raw)
+    return df_processed, header_mismatch
+
+# -------------------- PLOTS (MANTIDOS E COMPLETOS) --------------------
 
 def _get_empty_fig(text: str = "Sem dados") -> go.Figure:
     fig = go.Figure()
@@ -292,7 +371,132 @@ def plot_bubble_transacoes_categoria_y(df: pd.DataFrame, category_colors: Dict[s
     fig.update_yaxes(title_text="Categoria")
     return fig
 
-# -------------------- KPIs E TABELA (FUNÇÕES ESSENCIAIS) --------------------
+def plot_bubble_transacoes_valor_y(df: pd.DataFrame, category_colors: Dict[str,str]=None) -> go.Figure:
+    if df.empty: return _get_empty_fig("Sem transações")
+    dfp = df.copy()
+    dfp["VALOR_ABS"] = dfp["VALOR_NUM"].abs()
+    dfp["VALOR_FMT"] = dfp["VALOR_NUM"].apply(money_fmt_br)
+    fig = px.scatter(dfp, x="DATA", y="VALOR_NUM", size="VALOR_ABS", color="CATEGORIA",
+                     hover_name="DESCRIÇÃO", hover_data={"VALOR_FMT": True, "DATA": False},
+                     size_max=35, color_discrete_map=category_colors)
+    fig.update_traces(marker=dict(opacity=0.85, line=dict(width=0.6, color='rgba(0,0,0,0.12)')))
+    fig.update_layout(height=DEFAULT_CHART_HEIGHT+40, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+    fig.update_xaxes(title_text="Data")
+    fig.update_yaxes(title_text="Valor (R$)")
+    return fig
+
+def prepare_ohlc_period(df: pd.DataFrame, freq: str = "D") -> pd.DataFrame:
+    if df.empty: return pd.DataFrame()
+    period = df["DATA"].dt.to_period(freq)
+    dfp = df.copy()
+    dfp["PERIOD"] = period
+    groups = []
+    for per, g in dfp.groupby("PERIOD"):
+        g_sorted = g.sort_values("DATA")
+        open_v = g_sorted.iloc[0]["VALOR_NUM"]
+        close_v = g_sorted.iloc[-1]["VALOR_NUM"]
+        high_v = g_sorted["VALOR_NUM"].max()
+        low_v = g_sorted["VALOR_NUM"].min()
+        vol = g_sorted["VALOR_NUM"].abs().sum()
+        groups.append({"PERIOD": per, "ts": per.to_timestamp(), "open": open_v, "high": high_v, "low": low_v, "close": close_v, "volume": vol})
+    ohlc = pd.DataFrame(groups).sort_values("ts").reset_index(drop=True)
+    return ohlc
+
+def plot_candlestick(df: pd.DataFrame, freq: str = "D") -> go.Figure:
+    ohlc = prepare_ohlc_period(df, freq)
+    if ohlc.empty: return _get_empty_fig("Sem dados para candlestick")
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.04, row_heights=[0.72, 0.28])
+    fig.add_trace(go.Candlestick(x=ohlc["ts"], open=ohlc["open"], high=ohlc["high"], low=ohlc["low"], close=ohlc["close"],
+                                 increasing_line_color=COLORS["receita"], decreasing_line_color=COLORS["despesa"]), row=1, col=1)
+    fig.add_trace(go.Bar(x=ohlc["ts"], y=ohlc["volume"], name="Volume", marker_color=COLORS["neutral"]), row=2, col=1)
+    ohlc["sma7"] = ohlc["close"].rolling(window=7, min_periods=1).mean()
+    fig.add_trace(go.Scatter(x=ohlc["ts"], y=ohlc["sma7"], mode="lines", name="SMA7", line=dict(color=COLORS["trend"])), row=1, col=1)
+    fig.update_layout(height=DEFAULT_CHART_HEIGHT+80, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis_rangeslider_visible=False)
+    fig.update_xaxes(title_text="Período", row=2, col=1)
+    fig.update_yaxes(title_text="Valor (R$)", row=1, col=1)
+    fig.update_yaxes(title_text="Volume", row=2, col=1)
+    return fig
+
+def plot_monthly_heatmap(df: pd.DataFrame) -> go.Figure:
+    if df.empty: return _get_empty_fig()
+    dfh = df.copy()
+    dfh['day'] = dfh['DATA'].dt.day
+    dfh['ym'] = dfh['DATA'].dt.to_period('M').astype(str)
+    pivot = dfh.groupby(['ym','day'])['VALOR_NUM'].sum().reset_index()
+    heat = pivot.pivot(index='ym', columns='day', values='VALOR_NUM').fillna(0)
+    fig = go.Figure(data=go.Heatmap(z=heat.values, x=heat.columns, y=heat.index, colorscale='RdBu', reversescale=True,
+                                    hovertemplate="Mês: %{y}<br>Dia: %{x}<br>Saldo Diário: %{z:.2f} R$<extra></extra>"))
+    fig.update_layout(title='Heatmap Mensal de Saldo Diário', height=DEFAULT_CHART_HEIGHT+40, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+    fig.update_xaxes(title_text="Dia do Mês")
+    fig.update_yaxes(title_text="Mês")
+    return fig
+
+def plot_boxplot_by_category(df: pd.DataFrame) -> go.Figure:
+    if df.empty: return _get_empty_fig()
+    dfp = df.copy()
+    dfp['VALOR_ABS'] = dfp['VALOR_NUM'].abs()
+    fig = px.box(dfp, x='CATEGORIA', y='VALOR_ABS', points='outliers', color='TIPO', color_discrete_map={"Receita": COLORS["receita"], "Despesa": COLORS["despesa"]})
+    fig.update_layout(height=DEFAULT_CHART_HEIGHT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    fig.update_xaxes(tickangle=-45)
+    return fig
+
+# -------------------- SIDEBAR E FILTROS (MANTIDOS) --------------------
+
+def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
+    st.sidebar.title("Dashboard Financeiro Caec")
+    st.sidebar.markdown("---")
+    page = st.sidebar.selectbox("Altere a visualização", options=["Resumo Financeiro", "Dashboard Detalhado"], key="sb_page")
+    toggle_multi = st.sidebar.checkbox("Ativar filtro avançado (múltipla seleção e período)", value=False, key="sb_toggle_multi")
+    min_ts = df["DATA"].min() if not df.empty else pd.Timestamp(datetime.today() - timedelta(days=365))
+    max_ts = df["DATA"].max() if not df.empty else pd.Timestamp(datetime.today())
+    min_d = min_ts.date()
+    max_d = max_ts.date()
+    filters: Dict = {"mode": "month", "month": "Todos", "categories": []}
+    if toggle_multi:
+        with st.sidebar.expander("Filtros Avançados", expanded=True):
+            categories = sorted(df["CATEGORIA"].unique()) if not df.empty else []
+            categories = [c for c in categories if c != ""]
+            selected_cats = st.multiselect("Categorias (múltiplas)", options=categories, default=categories if categories else [], key="sb_cat_multi")
+            slider_val = st.slider("Período (arraste)", min_value=min_d, max_value=max_d, value=(min_d, max_d), format="YYYY-MM-DD", step=timedelta(days=1), key="sb_date_slider")
+            date_from = pd.to_datetime(slider_val[0])
+            date_to = pd.to_datetime(slider_val[1]) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+            filters["mode"] = "range"
+            filters["date_from"] = date_from
+            filters["date_to"] = date_to
+            filters["categories"] = selected_cats
+    else:
+        st.sidebar.markdown("### Filtro Rápido")
+        months = ["Todos"] + sorted(df["year_month"].unique(), reverse=True) if not df.empty else ["Todos"]
+        selected_month = st.sidebar.selectbox("Mês (ano-mês)", months, key="sb_month")
+        categories = ["Todos"] + sorted(df["CATEGORIA"].unique()) if not df.empty else ["Todos"]
+        categories = [c for c in categories if c != ""]
+        selected_category = st.sidebar.selectbox("Categoria", categories, key="sb_cat_single")
+        filters["mode"] = "month"
+        filters["month"] = selected_month
+        filters["categories"] = [selected_category] if selected_category != "Todos" else []
+    st.sidebar.markdown("---")
+    if st.sidebar.button("Limpar cache de dados", key="sb_clear_cache"):
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        st.sidebar.success("Cache limpo! Recarregue a página.")
+    st.sidebar.markdown("---")
+    st.sidebar.caption("Criado e administrado pela diretoria de Administração Comercial e Financeiro — by Rick")
+    return page, filters
+
+def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
+    f = df.copy()
+    if filters.get("mode") == "range":
+        f = f[(f["DATA"] >= filters["date_from"]) & (f["DATA"] <= filters["date_to"])]
+    else:
+        month = filters.get("month", "Todos")
+        if month and month != "Todos":
+            f = f[f["year_month"] == month]
+    cats = filters.get("categories", [])
+    if cats and "Todos" not in cats:
+        f = f[f["CATEGORIA"].isin(cats)]
+    return f.reset_index(drop=True)
+
+# -------------------- KPIs (MANTIDOS E COMPLETOS) --------------------
 
 def _sum_period(df: pd.DataFrame, start_dt: datetime, end_dt: datetime, tipo: str = "all") -> float:
     if df.empty: return 0.0
@@ -312,10 +516,67 @@ def _kpi_delta_text_and_color(curr: float, prev: float, positive_is_good: bool =
     else: delta_color = "normal" if (diff > 0) == positive_is_good else "inverse"
     return txt, delta_color
 
+def render_kpi_cards(df_full: pd.DataFrame, df_filtered: pd.DataFrame):
+    if df_full.empty:
+        st.info("Sem dados para KPIs")
+        return
+
+    receita_filtrada = df_filtered[df_filtered["VALOR_NUM"] > 0]["VALOR_NUM"].sum()
+    despesa_filtrada = df_filtered[df_filtered["VALOR_NUM"] < 0]["VALOR_NUM"].sum()
+    saldo_filtrado = receita_filtrada + despesa_filtrada
+
+    end = df_full["DATA"].max()
+    last30_end = pd.to_datetime(end)
+    last30_start = last30_end - pd.Timedelta(days=29)
+    prev30_end = last30_start - pd.Timedelta(seconds=1)
+    prev30_start = prev30_end - pd.Timedelta(days=29)
+
+    receita_curr = _sum_period(df_full, last30_start, last30_end, tipo="receita")
+    receita_prev = _sum_period(df_full, prev30_start, prev30_end, tipo="receita")
+    despesa_curr = _sum_period(df_full, last30_start, last30_end, tipo="despesa")
+    despesa_prev = _sum_period(df_full, prev30_start, prev30_end, tipo="despesa")
+
+    txt_rec_delta, color_rec = _kpi_delta_text_and_color(receita_curr, receita_prev, positive_is_good=True)
+    txt_dep_delta, color_dep = _kpi_delta_text_and_color(-despesa_curr, -despesa_prev, positive_is_good=False)
+    saldo_curr = receita_curr + despesa_curr
+    saldo_prev = receita_prev + despesa_prev
+    txt_saldo_delta, color_saldo = _kpi_delta_text_and_color(saldo_curr, saldo_prev, positive_is_good=True)
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        _render_kpi_card_html(
+            title="Receita Total (Período Filtrado)",
+            value=money_fmt_br(receita_filtrada),
+            delta=f"Últimos 30d: {txt_rec_delta}",
+            value_color="var(--kpi-receita)", 
+            delta_color=color_rec
+        )
+    with c2:
+        _render_kpi_card_html(
+            title="Despesa Total (Período Filtrado)",
+            value=money_fmt_br(abs(despesa_filtrada)),
+            delta=f"Últimos 30d: {txt_dep_delta}",
+            value_color="var(--kpi-despesa)",
+            delta_color=color_dep
+        )
+    with c3:
+        _render_kpi_card_html(
+            title="Saldo Total (Período Filtrado)",
+            value=money_fmt_br(saldo_filtrado),
+            delta=f"Últimos 30d: {txt_saldo_delta}",
+            value_color="var(--kpi-saldo)", 
+            delta_color=color_saldo
+        )
+
 def _render_kpi_card_html(title: str, value: str, delta: str, value_color: str, delta_color: str):
-    arrow, arrow_color = "—", "var(--text-secondary)"
-    if delta_color == "normal": arrow, arrow_color = "▲", "var(--kpi-receita)"
-    elif delta_color == "inverse": arrow, arrow_color = "▼", "var(--kpi-despesa)"
+    arrow = "—"
+    arrow_color = "var(--text-secondary)"
+    if delta_color == "normal":
+        arrow = "▲"
+        arrow_color = "var(--kpi-receita)"
+    elif delta_color == "inverse":
+        arrow = "▼"
+        arrow_color = "var(--kpi-despesa)"
     html = f"""
     <div class="kpi-card">
       <div class="kpi-label">{title}</div>
@@ -325,32 +586,7 @@ def _render_kpi_card_html(title: str, value: str, delta: str, value_color: str, 
     """
     st.markdown(html, unsafe_allow_html=True)
 
-def render_kpi_cards(df_full: pd.DataFrame, df_filtered: pd.DataFrame):
-    if df_full.empty:
-        st.info("Sem dados para KPIs")
-        return
-    receita_filtrada = df_filtered[df_filtered["VALOR_NUM"] > 0]["VALOR_NUM"].sum()
-    despesa_filtrada = df_filtered[df_filtered["VALOR_NUM"] < 0]["VALOR_NUM"].sum()
-    saldo_filtrado = receita_filtrada + despesa_filtrada
-
-    end = df_full["DATA"].max()
-    last30_end, last30_start = pd.to_datetime(end), pd.to_datetime(end) - pd.Timedelta(days=29)
-    prev30_end, prev30_start = last30_start - pd.Timedelta(seconds=1), last30_start - pd.Timedelta(seconds=1) - pd.Timedelta(days=29)
-    
-    receita_curr = _sum_period(df_full, last30_start, last30_end, tipo="receita")
-    receita_prev = _sum_period(df_full, prev30_start, prev30_end, tipo="receita")
-    despesa_curr = _sum_period(df_full, last30_start, last30_end, tipo="despesa")
-    despesa_prev = _sum_period(df_full, prev30_start, prev30_end, tipo="despesa")
-    
-    txt_rec_delta, color_rec = _kpi_delta_text_and_color(receita_curr, receita_prev, positive_is_good=True)
-    txt_dep_delta, color_dep = _kpi_delta_text_and_color(-despesa_curr, -despesa_prev, positive_is_good=False)
-    saldo_curr, saldo_prev = receita_curr + despesa_curr, receita_prev + despesa_prev
-    txt_saldo_delta, color_saldo = _kpi_delta_text_and_color(saldo_curr, saldo_prev, positive_is_good=True)
-
-    c1, c2, c3 = st.columns(3)
-    with c1: _render_kpi_card_html("Receita Total (Período Filtrado)", money_fmt_br(receita_filtrada), f"Últimos 30d: {txt_rec_delta}", "var(--kpi-receita)", color_rec)
-    with c2: _render_kpi_card_html("Despesa Total (Período Filtrado)", money_fmt_br(abs(despesa_filtrada)), f"Últimos 30d: {txt_dep_delta}", "var(--kpi-despesa)", color_dep)
-    with c3: _render_kpi_card_html("Saldo Total (Período Filtrado)", money_fmt_br(saldo_filtrado), f"Últimos 30d: {txt_saldo_delta}", "var(--kpi-saldo)", color_saldo)
+# -------------------- TABELA / EXPORT (MANTIDOS) --------------------
 
 def render_table(df: pd.DataFrame, key: str):
     if df.empty:
@@ -372,9 +608,25 @@ def main():
     st.markdown(MINIMAL_CSS, unsafe_allow_html=True)
     st.title("Dashboard Financeiro Caec")
 
-    df_full, header_mismatch = load_and_preprocess_data()
+    try:
+        df_full, header_mismatch = load_and_preprocess_data()
+    except Exception as e:
+        st.warning(f"Erro ao carregar dados do Google Sheets: {e}. Usando dados de exemplo para demonstração.")
+        # Usar DF mock para demonstração
+        mock_data = {
+            "DATA": [datetime.now() - timedelta(days=d) for d in range(60)] * 2,
+            "TIPO": ["Receita"] * 60 + ["Despesa"] * 60,
+            "CATEGORIA": ["Mensalidade", "Marketing", "Evento", "Aluguel"] * 30,
+            "DESCRIÇÃO": [f"Item {i}" for i in range(120)],
+            "VALOR": [f"{1000 * (1 if i % 2 == 0 else -1)}" for i in range(120)],
+            "OBSERVAÇÃO": ["N/D"] * 120,
+        }
+        df_full = preprocess_df(pd.DataFrame(mock_data))
+        header_mismatch = False
     
     if df_full.empty:
+        st.sidebar.markdown("---")
+        st.sidebar.caption("CAEC © 2025")
         st.warning("Planilha vazia ou erro ao importar dados. Verifique a planilha/credenciais.")
         return
 
@@ -399,6 +651,7 @@ def main():
 
         csv = _prepare_export_csv(df_filtered)
         st.download_button("Exportar CSV (Filtro Atual)", csv, file_name="caec_resumo_export.csv", mime="text/csv", key="download_resumo")
+
     else:
         tab_normais, tab_avancados, tab_tabela = st.tabs(["📊 Gráficos Principais", "📈 Análise Avançada", "📋 Tabela Completa"])
         with tab_normais:
@@ -419,10 +672,37 @@ def main():
             st.markdown("---")
             st.subheader("Visão Temporal de Lançamentos (por Categoria)")
             st.plotly_chart(plot_bubble_transacoes_categoria_y(df_filtered, category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_bubble_cat_y")
+            st.markdown("---")
+            st.subheader("Visão Detalhada de Transações")
+            st.plotly_chart(plot_bubble_transacoes_valor_y(df_filtered, category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_bubble_valor_y")
 
         with tab_avancados:
-            st.warning("Conteúdo avançado pendente.")
-        
+            agg_freq = st.selectbox("Agregação Candlestick", options=[("Diário","D"), ("Semanal","W"), ("Mensal","M")], format_func=lambda x: x[0], key="sb_candle_freq")
+            freq_code = agg_freq[1]
+            st.subheader(f"Análise Candlestick ({agg_freq[0]}) e Volume")
+            st.plotly_chart(plot_candlestick(df_filtered, freq=freq_code), use_container_width=True, config={'displayModeBar': False}, key=f"chart_candlestick_{freq_code}")
+
+            st.markdown("---")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("Fluxo Diário com Média Móvel (14 dias)")
+                fluxo = df_filtered.groupby(df_filtered["DATA"].dt.date)["VALOR_NUM"].sum().reset_index()
+                fluxo["DATA"] = pd.to_datetime(fluxo["DATA"])
+                fluxo["sma14"] = fluxo["VALOR_NUM"].rolling(window=14, min_periods=1).mean()
+                fig_ma = go.Figure()
+                cores_fluxo = [COLORS["receita"] if v >= 0 else COLORS["despesa"] for v in fluxo["VALOR_NUM"]]
+                fig_ma.add_trace(go.Bar(x=fluxo["DATA"], y=fluxo["VALOR_NUM"], name="Fluxo Diário", marker_color=cores_fluxo))
+                fig_ma.add_trace(go.Scatter(x=fluxo["DATA"], y=fluxo["sma14"], mode="lines", name="SMA14 (14 dias)", line=dict(color=COLORS["trend"])))
+                fig_ma.update_layout(height=DEFAULT_CHART_HEIGHT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(fig_ma, use_container_width=True, config={'displayModeBar': False}, key="chart_sma14_avancado")
+            with col2:
+                st.subheader("Distribuição de Valores por Categoria (Boxplot)")
+                st.plotly_chart(plot_boxplot_by_category(df_filtered), use_container_width=True, config={'displayModeBar': False}, key="chart_box_avancado")
+
+            st.markdown("---")
+            st.subheader("Heatmap de Saldo Diário")
+            st.plotly_chart(plot_monthly_heatmap(df_filtered), use_container_width=True, config={'displayModeBar': False}, key="chart_heatmap_avancado")
+
         with tab_tabela:
             st.subheader("Todos os Lançamentos (Filtro Atual)")
             render_table(df_filtered, key="table_full_detalhado")
