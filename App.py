@@ -2,6 +2,7 @@
 """
 Dashboard Financeiro Caec
 Versão refatorada para uso com Streamlit Cloud Secrets.
+Estilização corrigida para KPIs e fonte 'Roboto Mono' (JetBrains Mono style).
 """
 
 from datetime import datetime, timedelta
@@ -25,22 +26,53 @@ from sklearn.linear_model import LinearRegression
 EXPECTED_COLS = ["DATA", "TIPO", "CATEGORIA", "DESCRIÇÃO", "VALOR", "OBSERVAÇÃO"]
 
 # Paleta de cores padrão para os gráficos
+# Ajustei as cores para serem mais vibrantes e definidas.
 COLORS = {
-    "receita": "#2ca02c",  # Verde
-    "despesa": "#d62728",  # Vermelho
-    "saldo": "#636efa",   # Azul
+    "receita": "#28a745",  # Verde vibrante (similar ao success do Bootstrap)
+    "despesa": "#dc3545",  # Vermelho vibrante (similar ao danger do Bootstrap)
+    "saldo": "#007bff",   # Azul (similar ao primary do Bootstrap)
     "neutral": "#6c757d",  # Cinza
 }
 
 # Altura padrão para a maioria dos gráficos
 DEFAULT_CHART_HEIGHT = 360
 
-# ---------- CSS (Fonte customizada) ----------
-FONT_CSS = """
+# ---------- CSS (Fonte customizada e estilo para KPI) ----------
+# Substituí JetBrains Mono por Roboto Mono (que é similar e de fácil uso via Google Fonts)
+# e adicionei CSS para estilizar os KPIs
+FONT_CSS = f"""
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
-  :root { font-family: 'Roboto Mono', monospace; }
-  .stApp { font-family: 'Roboto Mono', monospace; }
+  /* Aplica Roboto Mono em todo o app */
+  .stApp, .stApp * {{ font-family: 'Roboto Mono', monospace !important; }}
+
+  /* Estilização para o widget st.metric (KPIs) */
+  .stMetric {{
+    background-color: #212529; /* Fundo escuro sutil */
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #343a40;
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+  }}
+
+  /* Estilização para o valor principal do KPI (Receita) */
+  .stMetric:nth-child(1) [data-testid="stMetricValue"] {{
+    color: {COLORS['receita']};
+  }}
+  /* Estilização para o valor principal do KPI (Despesa) */
+  .stMetric:nth-child(2) [data-testid="stMetricValue"] {{
+    color: {COLORS['despesa']};
+  }}
+  /* Estilização para o valor principal do KPI (Saldo) */
+  .stMetric:nth-child(3) [data-testid="stMetricValue"] {{
+    color: {COLORS['saldo']};
+  }}
+  
+  /* Corrige a cor dos deltas (setas) */
+  /* Delta Positivo (cor de Receita) */
+  .css-1ht1vst.e16fv1kl1 {{ color: {COLORS['receita']} !important; }}
+  /* Delta Negativo (cor de Despesa) */
+  .css-1ht1vst.e16fv1kl1.inverse {{ color: {COLORS['despesa']} !important; }}
 </style>
 """
 
@@ -317,12 +349,19 @@ def plot_pie_composicao(df: pd.DataFrame, kind: str = "Receita") -> go.Figure:
         
     series = series.sort_values(ascending=False)
     
+    # Define cores para os slices
+    if kind == "Receita":
+        slice_colors = [COLORS["receita"]] * len(series)
+    else:
+        slice_colors = [COLORS["despesa"]] * len(series)
+        
     fig = go.Figure(go.Pie(
         labels=series.index, 
         values=series.values, 
         hole=0.45, 
         textinfo="percent", 
-        sort=False
+        sort=False,
+        marker=dict(colors=slice_colors) # Aplica a cor do tipo principal
     ))
     fig.update_layout(
         height=DEFAULT_CHART_HEIGHT, 
@@ -339,12 +378,16 @@ def plot_bubble_transacoes(df: pd.DataFrame) -> go.Figure:
     dfp = df.copy()
     dfp["VALOR_ABS"] = dfp["VALOR_NUM"].abs()
     
+    # Mapeia a cor do TIPO (Receita/Despesa)
+    color_map = {"Receita": COLORS["receita"], "Despesa": COLORS["despesa"]}
+    
     fig = px.scatter(
         dfp, 
         x="DATA", 
         y="VALOR_NUM", 
         size="VALOR_ABS", 
-        color="CATEGORIA",
+        color="TIPO", # Colore por TIPO para Receita/Despesa
+        color_discrete_map=color_map,
         hover_name="DESCRIÇÃO", 
         size_max=30
     )
@@ -413,22 +456,29 @@ def plot_candlestick(df: pd.DataFrame, freq: str = "D") -> go.Figure:
         row_heights=[0.72, 0.28]
     )
     
-    # 1. Candlestick
+    # 1. Candlestick (Cores customizadas)
     fig.add_trace(go.Candlestick(
         x=ohlc["ts"], 
         open=ohlc["open"], 
         high=ohlc["high"], 
         low=ohlc["low"], 
         close=ohlc["close"], 
-        name="OHLC"
+        name="OHLC",
+        increasing_line_color=COLORS["receita"], # Verde para candles de aumento
+        decreasing_line_color=COLORS["despesa"], # Vermelho para candles de queda
+        increasing_fillcolor=COLORS["receita"],
+        decreasing_fillcolor=COLORS["despesa"],
+        line=dict(width=1)
     ), row=1, col=1)
     
     # 2. Volume
+    # Cores de volume baseadas na mudança (close > open = verde, close < open = vermelho)
+    volume_colors = [COLORS["receita"] if c >= o else COLORS["despesa"] for c, o in zip(ohlc["close"], ohlc["open"])]
     fig.add_trace(go.Bar(
         x=ohlc["ts"], 
         y=ohlc["volume"], 
         name="Volume", 
-        marker_color="#888888"
+        marker_color=volume_colors
     ), row=2, col=1)
     
     # 3. Média Móvel Simples (ex: 7 períodos)
@@ -466,11 +516,14 @@ def plot_monthly_heatmap(df: pd.DataFrame) -> go.Figure:
     pivot = dfh.groupby(['ym','day'])['VALOR_NUM'].sum().reset_index()
     heat = pivot.pivot(index='ym', columns='day', values='VALOR_NUM').fillna(0)
     
+    # Usa uma escala de cores que enfatiza positivo/negativo (ex: Diverging)
     fig = go.Figure(data=go.Heatmap(
         z=heat.values, 
         x=heat.columns, 
         y=heat.index, 
-        colorscale='Viridis' # Escala de cor (pode mudar)
+        colorscale='RdYlGn', # Vermelho-Amarelo-Verde (Red-Yellow-Green)
+        zmid=0, # Centro em 0 para balancear positivo/negativo
+        colorbar=dict(title="Saldo (R$)")
     ))
     
     fig.update_layout(
@@ -491,10 +544,15 @@ def plot_boxplot_by_category(df: pd.DataFrame) -> go.Figure:
     dfp = df.copy()
     dfp['VALOR_ABS'] = dfp['VALOR_NUM'].abs()
     
+    # Colore os boxplots por Tipo (Receita/Despesa)
+    color_map = {"Receita": COLORS["receita"], "Despesa": COLORS["despesa"]}
+    
     fig = px.box(
         dfp, 
         x='CATEGORIA', 
         y='VALOR_ABS', 
+        color='TIPO', # Adiciona cor por Tipo
+        color_discrete_map=color_map,
         points='outliers', 
         labels={'VALOR_ABS':'Valor absoluto (R$)'}
     )
@@ -624,29 +682,37 @@ def render_kpis(df: pd.DataFrame):
     
     c1, c2, c3 = st.columns(3)
     
-    # Usando st.metric para um visual padrão e limpo
+    # KPI 1: Receita Total
     c1.metric(
         label="Receita Total", 
         value=money_fmt_br(receita), 
+        delta=None, # Remove o delta por default
         delta_color="normal"
     )
+    
+    # KPI 2: Despesa Total (Mostra o valor absoluto)
+    # Usa delta_color="off" para forçar a cor do valor, mas podemos usar o inverse
     c2.metric(
         label="Despesa Total", 
         value=money_fmt_br(abs(despesa)), 
+        delta=None, # Remove o delta por default
         delta_color="inverse"
     )
+    
+    # KPI 3: Saldo (Receita - Despesa)
+    # **Correção da seta:**
+    # - Se saldo >= 0, delta é positivo (seta para cima/verde). Usamos `normal`.
+    # - Se saldo < 0, delta é negativo (seta para baixo/vermelho). Usamos `inverse`.
+    
+    delta_text = f"{money_fmt_br(saldo)}"
+    delta_type = "normal" if saldo >= 0 else "inverse"
+    
     c3.metric(
         label="Saldo (Receita - Despesa)", 
         value=money_fmt_br(saldo), 
-        delta="Positivo" if saldo >= 0 else "Negativo",
-        delta_color="normal" if saldo >= 0 else "inverse"
+        delta=delta_text, # Mostra o próprio saldo como delta para ter a cor e seta
+        delta_color=delta_type
     )
-    
-    # Alternativa com HTML customizado (se preferir as cores exatas)
-    # with c1:
-    #     st.markdown(f"<div style='font-size:12px;color:{COLORS['neutral']};text-transform:uppercase'>Receita</div>", unsafe_allow_html=True)
-    #     st.markdown(f"<div style='font-weight:700;color:{COLORS['receita']};font-size:20px'>{money_fmt_br(receita)}</div>", unsafe_allow_html=True)
-    # ... (similar para c2 e c3)
 
 def render_table(df: pd.DataFrame, key: str):
     """Renderiza a tabela de lançamentos usando st.dataframe."""
@@ -699,7 +765,7 @@ def main():
         initial_sidebar_state="expanded",
         menu_items={"About": "Dashboard Financeiro Caec © 2025 by Rick"}
     )
-    # Aplica o CSS
+    # Aplica o CSS (incluindo a fonte e o estilo dos KPIs)
     st.markdown(FONT_CSS, unsafe_allow_html=True)
     st.title("Dashboard Financeiro Caec")
 
