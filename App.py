@@ -36,14 +36,12 @@ PALETA = {
 }
 
 # Background SVG (textura leve — treliça / blueprint)
-# O SVG foi codificado em BASE64 (Data URI) para ser embutido no CSS.
-# O original usava %23 para # e foi ajustado.
-BACKGROUND_SVG_DATA = (
+BACKGROUND_SVG = (
     "data:image/svg+xml;utf8,"
     "<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'>"
     "<defs><pattern id='p' width='40' height='40' patternUnits='userSpaceOnUse'>"
-    f"<path d='M0 20 L40 20 M20 0 L20 40' stroke='{PALETA['azul'].replace('#', '%23')}' stroke-opacity='0.04' stroke-width='1'/>"
-    f"<path d='M0 0 L40 40 M40 0 L0 40' stroke='{PALETA['preto'].replace('#', '%23')}' stroke-opacity='0.02' stroke-width='0.5'/>"
+    "<path d='M0 20 L40 20 M20 0 L20 40' stroke='%23042251' stroke-opacity='0.04' stroke-width='1'/>"
+    "<path d='M0 0 L40 40 M40 0 L0 40' stroke='%23231f20' stroke-opacity='0.02' stroke-width='0.5'/>"
     "</pattern></defs><rect width='200' height='200' fill='url(%23p)' /></svg>"
 )
 
@@ -63,9 +61,8 @@ GLOBAL_CSS = f"""
   --caec-neutral: {PALETA['neutral']};
 }}
 /* Page background & fonts */
-/* Note: The blueprint is applied here using the Data URI */
 body .stApp {{
-  background-image: url("{BACKGROUND_SVG_DATA}");
+  background-image: url("{BACKGROUND_SVG}");
   background-repeat: repeat;
   background-attachment: fixed;
   font-family: "Open Sans", sans-serif;
@@ -91,17 +88,8 @@ h2, .subtitle {{
 .header-row {{ display:flex; align-items:center; gap:12px; }}
 .logo-img {{ border-radius:6px; }}
 .footer {{ text-align:center; color:#94a3b8; padding-top:10px; font-size:0.85rem; }}
-
 /* Adaptations for dark mode override (when chosen) */
-/* The dark-mode class is added via JavaScript in the main function */
-body.dark-mode .kpi-card {{ 
-  background: rgba(6,11,26,0.75); 
-  border: 1px solid rgba(255,255,255,0.03); 
-  color: var(--caec-branco);
-}}
-body.dark-mode h1, body.dark-mode h2, body.dark-mode .kpi-label {{
-  color: var(--caec-amarelo); /* Highlight titles in dark mode */
-}}
+body.dark-mode .kpi-card {{ background: rgba(6,11,26,0.75); border: 1px solid rgba(255,255,255,0.03); }}
 </style>
 """
 st.set_page_config(page_title="Dashboard Financeiro CAEC", layout="wide", initial_sidebar_state="expanded",
@@ -130,7 +118,7 @@ def parse_val_str_to_float(val) -> float:
 def money_fmt_br(v: float) -> str:
     return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-# ========= CARREGAMENTO DE DADOS (SEM MUDANÇAS NA LÓGICA DE CARGA) =========
+# ========= CARREGAMENTO DE DADOS =========
 # Prioridade:
 # 1) Google Sheets via st.secrets (se disponível)
 # 2) data.csv in project root
@@ -162,28 +150,19 @@ def load_sheet_values(client) -> List[List[str]]:
 def build_dataframe_from_sheet(values: List[List[str]]) -> Tuple[pd.DataFrame, bool]:
     if not values or len(values) < 2:
         return pd.DataFrame(columns=EXPECTED_COLS), False
-    # Use second row for header if available, otherwise assume first row
-    header_row_index = 1
-    if len(values) < 2:
-        header_row_index = 0
-    header = [str(x).strip() for x in values[header_row_index]]
-    body = values[header_row_index+1:] if len(values) > header_row_index else []
-    
+    header = [str(x).strip() for x in values[1]]
+    body = values[2:] if len(values) > 2 else []
     if all(col in header for col in EXPECTED_COLS):
         df = pd.DataFrame(body, columns=header)[EXPECTED_COLS].copy()
         return df, False
-    
     # fallback: try to pad rows to EXPECTED_COLS
-    # Fallback logic slightly simplified, assuming EXPECTED_COLS are the column names.
     max_len = max((len(r) for r in body), default=0)
     target_len = max(max_len, len(EXPECTED_COLS))
     padded = [r + [""]*(target_len - len(r)) for r in body]
     if padded:
-        # Assuming the first row is *meant* to be the header if we're falling back.
         df = pd.DataFrame(padded, columns=EXPECTED_COLS)
     else:
         df = pd.DataFrame(columns=EXPECTED_COLS)
-        
     return df, True
 
 def load_data() -> Tuple[pd.DataFrame, bool]:
@@ -193,11 +172,7 @@ def load_data() -> Tuple[pd.DataFrame, bool]:
         vals = load_sheet_values(client)
         if vals:
             df, header_mismatch = build_dataframe_from_sheet(vals)
-            # Check if dataframe is actually empty after trying to build from sheet
-            if not df.empty:
-                 return df, header_mismatch
-            # If df is empty, continue to local/synthetic data
-    
+            return df, header_mismatch
     # 2) try local CSV
     if os.path.exists("data.csv"):
         try:
@@ -211,7 +186,6 @@ def load_data() -> Tuple[pd.DataFrame, bool]:
             return df, False
         except Exception:
             pass
-            
     # 3) example synthetic dataset for demo
     today = pd.Timestamp(datetime.now().date())
     rng = pd.date_range(end=today, periods=120, freq='D')
@@ -227,7 +201,7 @@ def load_data() -> Tuple[pd.DataFrame, bool]:
     df = pd.DataFrame(rows, columns=EXPECTED_COLS)
     return df, False
 
-# ========= PREPROCESSAMENTO (SEM MUDANÇAS) =========
+# ========= PREPROCESSAMENTO =========
 
 def preprocess_df(df_raw: pd.DataFrame) -> pd.DataFrame:
     df = df_raw.copy()
@@ -255,7 +229,7 @@ def preprocess_df(df_raw: pd.DataFrame) -> pd.DataFrame:
     df["year_month"] = df["DATA"].dt.to_period("M").astype(str)
     return df
 
-# ========= KPI / DELTA (30 dias) (SEM MUDANÇAS) =========
+# ========= KPI / DELTA (30 dias) =========
 
 def sum_period(df: pd.DataFrame, start_dt: pd.Timestamp, end_dt: pd.Timestamp, tipo: str="all") -> float:
     if df.empty:
@@ -291,13 +265,13 @@ def kpi_delta(curr: float, prev: float, positive_is_good: bool=True) -> Tuple[st
             direction = "down" if positive_is_good else "up"
     return txt, direction
 
-# ========= UI RENDER: KPIs (HTML cards) (SEM MUDANÇAS) =========
+# ========= UI RENDER: KPIs (HTML cards) =========
 
 def render_header_with_logo():
     cols = st.columns([0.12, 0.88])
     with cols[0]:
         if os.path.exists("logo.png"):
-            st.image("logo.png", width=110, caption=None, output_format="PNG", use_column_width="auto") # Adicionado use_column_width
+            st.image("logo.png", width=110, caption=None, output_format="PNG")
         else:
             # fallback simple SVG stylized Athena column
             st.markdown(f"<div style='width:110px;height:64px;border-radius:6px;background:{PALETA['azul']};display:flex;align-items:center;justify-content:center;color:{PALETA['branco']};font-weight:700;'>CAEC</div>", unsafe_allow_html=True)
@@ -377,7 +351,7 @@ def render_kpis_and_summary(df: pd.DataFrame):
         "saldo_curr": saldo_curr
     }
 
-# ========= GRÁFICOS (SEM MUDANÇAS) =========
+# ========= GRÁFICOS =========
 
 def plot_percent_bar(revenue: float, expense: float):
     """
@@ -431,54 +405,30 @@ def plot_fluxo_diario(df: pd.DataFrame):
     fig.update_yaxes(title_text="Valor (R$)")
     return fig
 
-# ========= SIDEBAR (THEME & FILTROS) - AJUSTADO PARA UX DO TEMA =========
+# ========= SIDEBAR (THEME & FILTROS) =========
 
 def sidebar_controls(df: pd.DataFrame) -> Dict:
     st.sidebar.title("Controles — CAEC")
-    
-    # Opção de tema ajustada para focar na mudança de classe CSS.
-    # 'Auto' usará o tema base do Streamlit.
-    theme_choice = st.sidebar.radio("Tema (UI/UX)", options=["Auto", "Light", "Dark"], index=0, 
-                                    help="Auto: Usa o tema padrão do Streamlit (detecta dark/light). Light/Dark: Força o modo de cores.")
+    theme_choice = st.sidebar.radio("Tema (Auto/Manual)", options=["Auto", "Light", "Dark"], index=0)
     st.sidebar.markdown("---")
 
     # date filters
     min_d = df["DATA"].min().date() if not df.empty else datetime.now().date() - timedelta(days=365)
     max_d = df["DATA"].max().date() if not df.empty else datetime.now().date()
-    # Ensure min_d is always less than or equal to max_d
-    if min_d > max_d:
-        min_d = max_d - timedelta(days=365)
-        
-    # Check if date_range has two elements
-    try:
-        default_range = (min_d, max_d)
-    except Exception:
-        default_range = (datetime.now().date() - timedelta(days=30), datetime.now().date())
-        
-    date_range = st.sidebar.date_input("Período (início → fim)", 
-                                       value=default_range, 
-                                       min_value=min_d, 
-                                       max_value=max_d)
-    
-    # Ensure date_range is a tuple/list of two dates
-    if not isinstance(date_range, (list, tuple)) or len(date_range) != 2:
-        date_range = default_range
-
-
+    date_range = st.sidebar.date_input("Período (início → fim)", value=(min_d, max_d), min_value=min_d, max_value=max_d)
     selected_categories = st.sidebar.multiselect("Categorias (filtrar)", options=sorted(df["CATEGORIA"].unique()), default=None)
     st.sidebar.markdown("---")
     if st.sidebar.button("Limpar cache & recarregar"):
         try:
-            # Clear all caches and trigger a rerun
             st.cache_data.clear()
             st.cache_resource.clear()
-            st.rerun() # Use st.rerun() to force a complete reload
+            st.sidebar.success("Cache limpo — recarregue a página.")
         except Exception:
             st.sidebar.warning("Falha ao limpar cache (ambiente).")
 
     return {"theme": theme_choice, "date_range": date_range, "categories": selected_categories}
 
-# ========= APLICAR FILTROS (SEM MUDANÇAS) =========
+# ========= APLICAR FILTROS =========
 
 def apply_filters(df: pd.DataFrame, controls: Dict) -> pd.DataFrame:
     f = df.copy()
@@ -492,7 +442,7 @@ def apply_filters(df: pd.DataFrame, controls: Dict) -> pd.DataFrame:
         f = f[f["CATEGORIA"].isin(cats)]
     return f.reset_index(drop=True)
 
-# ========= MAIN - AJUSTADO PARA MELHOR UX DO TEMA =========
+# ========= MAIN =========
 
 def main():
     # Header + logo
@@ -508,36 +458,23 @@ def main():
 
     # Theme handling: apply dark-mode class to body if Dark selected
     theme = controls["theme"]
-    
-    # JavaScript para manipular a classe 'dark-mode' no corpo do documento
-    js_toggle_dark = f"""
-    <script>
-    function toggleDarkMode(mode) {{
-        const body = document.body;
-        if (mode === 'Dark') {{
-            body.classList.add('dark-mode');
-        }} else if (mode === 'Light') {{
-            body.classList.remove('dark-mode');
-        }} else if (mode === 'Auto') {{
-            // Tenta detectar o tema Streamlit (melhor esforço) e remove a classe para Streamlit cuidar
-            try {{
-                const base = window.parent.document.body.getAttribute('data-theme');
-                if (base === 'dark') {{
-                    body.classList.add('dark-mode');
-                }} else {{
-                    body.classList.remove('dark-mode');
-                }}
-            }} catch (e) {{
-                // Fallback para remover a classe em Auto, deixando Streamlit gerenciar
-                body.classList.remove('dark-mode');
-            }}
-        }}
-    }}
-    // Aplica a classe ao carregar
-    toggleDarkMode('{theme}'); 
-    </script>
-    """
-    st.markdown(js_toggle_dark, unsafe_allow_html=True)
+    if theme == "Dark":
+        st.markdown("<script>document.body.classList.add('dark-mode');</script>", unsafe_allow_html=True)
+        # tune some CSS for dark background
+        st.markdown(f"<style>body{{background-color: #071226; color: {PALETA['branco']};}} .stApp{{background-color:#071226;}}</style>", unsafe_allow_html=True)
+    elif theme == "Light":
+        st.markdown("<script>document.body.classList.remove('dark-mode');</script>", unsafe_allow_html=True)
+        st.markdown(f"<style>body{{background-color: {PALETA['branco']}; color: {PALETA['preto']};}} .stApp{{background-color:{PALETA['branco']};}}</style>", unsafe_allow_html=True)
+    else:
+        # Auto: attempt to detect streamlit theme option (best-effort); if not possible, keep light
+        try:
+            base = st.get_option("theme.base")
+            if base == "dark":
+                st.markdown("<script>document.body.classList.add('dark-mode');</script>", unsafe_allow_html=True)
+            else:
+                st.markdown("<script>document.body.classList.remove('dark-mode');</script>", unsafe_allow_html=True)
+        except Exception:
+            pass
 
     # Apply filters to df
     df_filtered = apply_filters(df, controls)
@@ -556,8 +493,7 @@ def main():
 
     with col_left:
         st.subheader("Fluxo — Proporção Receita vs Despesa")
-        # Usa os dados do período atual (last 30 days)
-        fig_pct = plot_percent_bar(summary["receita_curr"], summary["despesa_curr"]) 
+        fig_pct = plot_percent_bar(summary["receita_curr"], summary["despesa_curr"])
         st.plotly_chart(fig_pct, use_container_width=True, config={"displayModeBar": False})
 
         st.subheader("Evolução do Saldo")
