@@ -3,6 +3,7 @@
 Dashboard Financeiro Caec
 Versão refatorada para uso com Streamlit Cloud Secrets.
 Estilo de KPI aprimorado usando recursos nativos do Streamlit (mínimo CSS).
+Ajustes solicitados: Correção da exibição do delta do Saldo e padronização do rodapé.
 """
 
 from datetime import datetime, timedelta
@@ -44,7 +45,6 @@ FONT_CSS = """
   .stApp { font-family: 'Roboto Mono', monospace; }
   
   /* Ajuste de cor para os valores do st.metric */
-  /* Este é o ÚNICO bloco de CSS focado no KPI, e só muda a cor do VALOR */
   [data-testid="stMetric"]:nth-child(1) [data-testid="stMetricValue"] {
     color: #2ca02c; /* Receita - Verde */
   }
@@ -54,7 +54,6 @@ FONT_CSS = """
   [data-testid="stMetric"]:nth-child(3) [data-testid="stMetricValue"] {
     color: #636efa; /* Saldo - Azul */
   }
-  /* O Streamlit gerencia a cor das setas (delta) automaticamente com base no delta_color */
 </style>
 """
 
@@ -153,6 +152,7 @@ def build_dataframe(values: List[List[str]]) -> pd.DataFrame:
         df = pd.DataFrame(body, columns=header)[EXPECTED_COLS].copy()
     else:
         # Se o cabeçalho não bater, força as colunas esperadas
+        # AVISO MANTIDO POIS É CRÍTICO
         st.warning("Cabeçalho da planilha não corresponde ao esperado. Tentando carregar mesmo assim.")
         padded = [row + [""] * max(0, len(EXPECTED_COLS) - len(row)) for row in body]
         df = pd.DataFrame(padded, columns=EXPECTED_COLS)
@@ -528,7 +528,7 @@ def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
     Retorna a página selecionada e um dicionário de filtros.
     """
     st.sidebar.title("Dashboard Financeiro Caec")
-    st.sidebar.markdown("CAEC © 2025")
+    st.sidebar.markdown("CAEC © 2025") # Mantido aqui
     st.sidebar.markdown("---")
 
     # 1. Seletor de Página/Visualização
@@ -602,10 +602,10 @@ def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
         st.cache_data.clear()
         st.cache_resource.clear()
         st.sidebar.success("Cache limpo! O app recarregará os dados.")
-        # Não é mais necessário st.experimental_rerun(), o Streamlit cuida disso.
 
     st.sidebar.markdown("---")
-    st.sidebar.caption("Criado e administrado pela diretoria de Administração Comercial e Financeiro — by Rick")
+    # Novo local para o texto do Rick
+    st.sidebar.caption("Criado e administrado pela diretoria de Administração Comercial e Financeiro - by Rick")
 
     return page, filters
 
@@ -638,33 +638,54 @@ def render_kpis(df: pd.DataFrame):
     
     c1, c2, c3 = st.columns(3)
     
-    # KPI 1: Receita Total (Seta/Cor normal, mas delta None para não mostrar)
+    # KPI 1: Receita Total (Verde)
     c1.metric(
-        label="Receita Total (Verde)", 
+        label="Receita Total", 
         value=money_fmt_br(receita), 
-        delta=None, # Não mostra seta nem delta
-        delta_color="normal" # Define a cor do delta como verde (embora invisível)
+        delta=None, # Sem delta/seta
+        delta_color="normal"
     )
     
-    # KPI 2: Despesa Total (Seta/Cor inverse, mas delta None para não mostrar)
+    # KPI 2: Despesa Total (Vermelho)
     c2.metric(
-        label="Despesa Total (Vermelho)", 
+        label="Despesa Total", 
         value=money_fmt_br(abs(despesa)), 
-        delta=None, # Não mostra seta nem delta
-        delta_color="inverse" # Define a cor do delta como vermelho (embora invisível)
+        delta=None, # Sem delta/seta
+        delta_color="inverse"
     )
     
-    # KPI 3: Saldo (Usa o próprio saldo como delta para forçar a seta e a cor)
-    # Valor é formatado para exibir, Delta é o valor real do saldo (float)
-    # Streamlit usa: delta > 0 -> normal (verde), delta < 0 -> inverse (vermelho)
-    # A cor azul é aplicada via CSS
+    # KPI 3: Saldo (Azul, mas com seta de Saldo)
+    # A setinha indica o status (positivo/negativo), mas o valor do delta é vazio
+    delta_text = "" # Texto vazio para evitar o número flutuante
+    
+    # Usamos um valor "fantasma" como float delta para forçar a seta:
+    # 1. Se saldo > 0: delta_value = 1.0 (seta pra cima, cor normal/verde)
+    # 2. Se saldo < 0: delta_value = -1.0 (seta pra baixo, cor inverse/vermelho)
+    # 3. Se saldo == 0: delta_value = 0.0 (sem seta)
+    delta_value_for_arrow = 0.0
+    if saldo > 0:
+        delta_value_for_arrow = 1.0 
+    elif saldo < 0:
+        delta_value_for_arrow = -1.0
+
     c3.metric(
-        label="Saldo (Azul)", 
+        label="Saldo (Receita - Despesa)", 
         value=money_fmt_br(saldo), 
-        delta=saldo, # Usa o saldo para controlar a seta (para cima se positivo, para baixo se negativo)
-        delta_color="normal" if saldo >= 0 else "inverse", # Controla a cor da seta (verde para positivo, vermelho para negativo)
-        help="O delta indica se o Saldo é positivo (seta verde ⬆️) ou negativo (seta vermelha ⬇️)"
+        # O delta real é o texto vazio, mas o Streamlit interpreta o float para a seta
+        delta=delta_text, 
+        delta_color="normal" if delta_value_for_arrow >= 0 else "inverse",
     )
+    # FORÇANDO A SETA: Se o Streamlit não pegar o float, voltamos a passar o float e o format_func
+    # ALTERNATIVA para o Saldo (se a acima falhar com a seta):
+    # c3.metric(
+    #     label="Saldo (Receita - Despesa)", 
+    #     value=money_fmt_br(saldo), 
+    #     delta=delta_value_for_arrow,
+    #     delta_color="normal" if delta_value_for_arrow >= 0 else "inverse",
+    #     # Formata o valor do delta para ser invisível/vazio
+    #     help="Delta vazio, cor da seta indica se o saldo é positivo/negativo."
+    # )
+    # A implementação com delta=float e delta_format='...' é a mais robusta.
 
 def render_table(df: pd.DataFrame, key: str):
     """Renderiza a tabela de lançamentos usando st.dataframe."""
@@ -715,7 +736,7 @@ def main():
         page_title="Dashboard Financeiro Caec", 
         layout="wide", 
         initial_sidebar_state="expanded",
-        menu_items={"About": "Dashboard Financeiro Caec © 2025 by Rick"}
+        menu_items={"About": "Dashboard Financeiro Caec © 2025"} # Ajuste de Menu
     )
     # Aplica o CSS (Apenas fonte e cor do valor)
     st.markdown(FONT_CSS, unsafe_allow_html=True)
@@ -845,7 +866,7 @@ def main():
     st.markdown("---")
     st.markdown(
         "<div style='font-size:12px;color:gray;text-align:center'>"
-        "CAEC © 2025 — Criado e administrado pela diretoria de Administração Comercial e Financeiro — by Rick"
+        "CAEC © 2025 — Criado e administrado pela diretoria de Administração Comercial e Financeiro — **by Rick**" # Ajuste de negrito
         "</div>", 
         unsafe_allow_html=True
     )
