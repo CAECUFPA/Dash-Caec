@@ -2,7 +2,8 @@
 """
 Dashboard Financeiro Caec
 Versão refatorada para uso com Streamlit Cloud Secrets.
-Alterações: Cores nos KPIs e layout do Gráfico de Bolhas combinado.
+Alterações: Cores nos KPIs, layout do Gráfico de Bolhas combinado,
+e RESTAURAÇÃO da lógica de tratamento de CATEGORIA e N/D.
 """
 
 from datetime import datetime, timedelta
@@ -58,6 +59,7 @@ def parse_val_str_to_float(val) -> float:
     """
     Converte uma string de moeda (ex: "R$ 1.234,56" ou "(1.234,56)")
     para um número float. Trata valores negativos (parênteses ou sinal).
+    (MANTIDO)
     """
     if pd.isna(val):
         return 0.0
@@ -88,9 +90,6 @@ def money_fmt_br(value: float) -> str:
 
 @st.cache_resource(ttl=600)
 def get_gspread_client() -> Optional[GSpreadClient]:
-    """
-    Autoriza e retorna um cliente gspread usando credenciais do st.secrets.
-    """
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     try:
         creds_dict = st.secrets["gcp_service_account"]
@@ -102,9 +101,6 @@ def get_gspread_client() -> Optional[GSpreadClient]:
         return None
 
 def load_sheet_values(client: GSpreadClient) -> List[List[str]]:
-    """
-    Carrega todos os valores da planilha especificada no st.secrets.
-    """
     if not client:
         return []
         
@@ -126,9 +122,6 @@ def load_sheet_values(client: GSpreadClient) -> List[List[str]]:
         return []
 
 def build_dataframe(values: List[List[str]]) -> pd.DataFrame:
-    """
-    Constrói um DataFrame Pandas a partir da lista de valores da planilha.
-    """
     if not values or len(values) < 1:
         return pd.DataFrame(columns=EXPECTED_COLS)
         
@@ -149,25 +142,56 @@ def build_dataframe(values: List[List[str]]) -> pd.DataFrame:
 def preprocess_df(df_raw: pd.DataFrame) -> pd.DataFrame:
     """
     Aplica a limpeza e transformação principal no DataFrame.
+    *** RESTAURADO a lógica de tratamento de CATEGORIA e N/D do código de exemplo original. ***
     """
     df = df_raw.copy()
     
+    # 1. Converter Datas (essencial)
     df["DATA"] = pd.to_datetime(df["DATA"], dayfirst=True, errors="coerce")
     df = df.dropna(subset=["DATA"]).reset_index(drop=True)
     
+    # 2. Converter Valores e ajustar sinal de acordo com o Tipo
     df["VALOR_NUM"] = df["VALOR"].apply(parse_val_str_to_float)
     
     df["TIPO"] = df["TIPO"].fillna("").astype(str).str.strip()
     mask_empty_tipo = df["TIPO"] == ""
+    # Infere o tipo pelo valor se estiver vazio
     df.loc[mask_empty_tipo, "TIPO"] = df.loc[mask_empty_tipo, "VALOR_NUM"].apply(lambda v: "Despesa" if v < 0 else "Receita")
     
-    df["CATEGORIA"] = df["CATEGORIA"].fillna("Outros").astype(str).str.strip()
+    # Ajusta o sinal para Receita ser sempre positiva e Despesa ser sempre negativa
+    mask_receita = df["TIPO"].str.contains("Receita", case=False, na=False)
+    mask_despesa = df["TIPO"].str.contains("Despesa", case=False, na=False)
+
+    df.loc[mask_receita, "VALOR_NUM"] = abs(df.loc[mask_receita, "VALOR_NUM"])
+    df.loc[mask_despesa, "VALOR_NUM"] = -abs(df.loc[mask_despesa, "VALOR_NUM"])
+    
+    # 3. Limpar e preencher NAs textuais (RETORNO AO CÓDIGO DE EXEMPLO)
+    df["CATEGORIA"] = df["CATEGORIA"].fillna("").astype(str).str.strip()
     df["DESCRIÇÃO"] = df["DESCRIÇÃO"].fillna("").astype(str).str.strip()
     df["OBSERVAÇÃO"] = df["OBSERVAÇÃO"].fillna("").astype(str).str.strip()
+
+    # Lógica de categorização mais robusta do seu exemplo
+    def is_mostly_numeric_or_empty(s):
+        s = str(s)
+        if s == "":
+            return True
+        # Categorias muito curtas e numéricas são suspeitas
+        if s.isdigit() and len(s) < 5:
+            return True
+        return False
+        
+    mask_invalid_cat = df["CATEGORIA"].apply(is_mostly_numeric_or_empty)
+    df.loc[mask_invalid_cat, "CATEGORIA"] = "NÃO CATEGORIZADO"
     
+    # Substituir Descrição/Observação vazias por N/D
+    df.loc[df["DESCRIÇÃO"] == "", "DESCRIÇÃO"] = "N/D"
+    df.loc[df["OBSERVAÇÃO"] == "", "OBSERVAÇÃO"] = "N/D"
+    
+    # 4. Ordenar e calcular saldo acumulado
     df = df.sort_values("DATA").reset_index(drop=True)
     df["Saldo Acumulado"] = df["VALOR_NUM"].cumsum()
     
+    # 5. Coluna auxiliar para filtro de mês
     df["year_month"] = df["DATA"].dt.to_period("M").astype(str)
     
     return df
@@ -291,7 +315,8 @@ def plot_categoria_barras(df: pd.DataFrame, kind: str = "Receita") -> go.Figure:
     fig.update_layout(
         height=DEFAULT_CHART_HEIGHT - 10, 
         paper_bgcolor="rgba(0,0,0,0)", 
-        plot_bgcolor="rgba(0,0,0,0)"
+        plot_bgcolor="rgba(0,0,0,0)",
+        yaxis={'categoryorder':'total ascending'} # Garante a ordem correta
     )
     return fig
 
@@ -311,7 +336,7 @@ def plot_pie_composicao(df: pd.DataFrame, kind: str = "Receita") -> go.Figure:
         labels=series.index, 
         values=series.values, 
         hole=0.45, 
-        textinfo="percent", 
+        textinfo="percent+label", 
         sort=False
     ))
     fig.update_layout(
@@ -323,36 +348,41 @@ def plot_pie_composicao(df: pd.DataFrame, kind: str = "Receita") -> go.Figure:
     return fig
 
 def plot_bubble_transacoes(df: pd.DataFrame) -> go.Figure:
-    """Plota um gráfico de bolhas de todas as transações (Valor vs Data)."""
+    """
+    Gráfico de bolhas para visualizar transações ao longo do tempo.
+    *** RESTAURADO O USO DE CATEGORIA NO EIXO Y (Do código de exemplo original) ***
+    """
     if df.empty:
         return _get_empty_fig("Sem transações")
-        
-    dfp = df.copy()
-    dfp["VALOR_ABS"] = dfp["VALOR_NUM"].abs()
-    dfp["Tipo"] = dfp["TIPO"].apply(lambda x: "Receita" if x.lower() == "receita" else "Despesa")
-    
+
+    df_plot = df.copy()
+    df_plot["Size"] = df_plot["VALOR_NUM"].abs()
+    df_plot["Color"] = df_plot["VALOR_NUM"].apply(lambda x: "Receita" if x > 0 else "Despesa")
+
     fig = px.scatter(
-        dfp, 
+        df_plot, 
         x="DATA", 
-        y="VALOR_NUM", 
-        size="VALOR_ABS", 
-        color="Tipo", # Colore por Tipo para diferenciar Receita/Despesa
-        color_discrete_map={"Receita": COLORS["receita"], "Despesa": COLORS["despesa"]},
+        y="CATEGORIA", # Eixo Y é a Categoria (Conforme o seu original)
+        size="Size", 
+        color="Color",
         hover_name="DESCRIÇÃO", 
-        size_max=30
+        hover_data={"VALOR_NUM": True, "DATA": False, "CATEGORIA": False, "Size": False},
+        color_discrete_map={"Receita": COLORS["receita"], "Despesa": COLORS["despesa"]},
+        title="Transações ao Longo do Tempo (Tamanho = Valor Absoluto)"
     )
     fig.update_layout(
-        title="Transações (Tamanho=Valor Absoluto)",
         height=DEFAULT_CHART_HEIGHT + 40, 
         paper_bgcolor="rgba(0,0,0,0)", 
-        plot_bgcolor="rgba(0,0,0,0)"
+        plot_bgcolor="rgba(0,0,0,0)",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
-    fig.update_yaxes(title_text="Valor (R$)")
     fig.update_xaxes(title_text="Data")
+    fig.update_yaxes(title_text="Categoria")
     return fig
 
-# Funções plot_candlestick, plot_monthly_heatmap, plot_boxplot_by_category... (manter)
-# ... [Código das funções plot_candlestick, prepare_ohlc_period, plot_monthly_heatmap, plot_boxplot_by_category aqui, mantendo a originalidade do código do usuário, pois elas não precisam ser alteradas.] ...
+
+# Funções plot_candlestick, prepare_ohlc_period, plot_monthly_heatmap, plot_boxplot_by_category... 
+# (Mantidas do seu código, pois estão corretas e não foram alvo de alteração)
 
 def prepare_ohlc_period(df: pd.DataFrame, freq: str = "D") -> pd.DataFrame:
     """
@@ -502,32 +532,25 @@ def plot_boxplot_by_category(df: pd.DataFrame) -> go.Figure:
     fig.update_xaxes(tickangle=-45)
     return fig
 
+# ---------- SIDEBAR (Filtros e Controles) (MANTIDO) ----------
 
-# ---------- SIDEBAR (Filtros e Controles) (Manter o original) ----------
 def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
-    """
-    Renderiza a barra lateral com os filtros de página, período e categoria.
-    Retorna a página selecionada e um dicionário de filtros.
-    """
     st.sidebar.title("Dashboard Financeiro Caec")
     st.sidebar.markdown("CAEC © 2025")
     st.sidebar.markdown("---")
 
-    # 1. Seletor de Página/Visualização
     page = st.sidebar.selectbox(
         "Altera visualização", 
         options=["Resumo Financeiro", "Dashboard Detalhado"], 
         key="sb_page"
     )
 
-    # 2. Toggle para modo de filtro
     toggle_multi = st.sidebar.checkbox(
         "Ativar filtro avançado (múltipla seleção e período)", 
         value=False, 
         key="sb_toggle_multi"
     )
 
-    # 3. Limites de data para os filtros
     min_ts = df["DATA"].min() if not df.empty else pd.Timestamp(datetime.today() - timedelta(days=365))
     max_ts = df["DATA"].max() if not df.empty else pd.Timestamp(datetime.today())
     min_d = min_ts.date()
@@ -536,7 +559,6 @@ def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
     filters: Dict = {"mode": "month", "month": "Todos", "categories": []}
 
     if toggle_multi:
-        # Modo Avançado: Multiselect de Categoria + Slider de Data
         st.sidebar.markdown("### Filtros Avançados")
         categories = sorted(df["CATEGORIA"].unique()) if not df.empty else []
         selected_cats = st.sidebar.multiselect(
@@ -556,7 +578,6 @@ def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
             key="sb_date_slider"
         )
         
-        # Ajusta o 'date_to' para incluir o dia inteiro
         date_from = pd.to_datetime(slider_val[0])
         date_to = pd.to_datetime(slider_val[1]) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
         
@@ -565,7 +586,6 @@ def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
         filters["date_to"] = date_to
         filters["categories"] = selected_cats
     else:
-        # Modo Simples: Selectbox de Mês + Selectbox de Categoria
         st.sidebar.markdown("### Filtro Rápido")
         months = ["Todos"] + sorted(df["year_month"].unique(), reverse=True) if not df.empty else ["Todos"]
         selected_month = st.sidebar.selectbox("Mês (ano-mês)", months, key="sb_month")
@@ -579,7 +599,6 @@ def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
 
     st.sidebar.markdown("---")
     
-    # 4. Botão de Limpar Cache
     if st.sidebar.button("Limpar cache de dados", key="sb_clear_cache"):
         st.cache_data.clear()
         st.cache_resource.clear()
@@ -594,7 +613,6 @@ def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
     """Aplica o dicionário de filtros ao DataFrame principal."""
     f = df.copy()
     
-    # 1. Filtro de Data
     if filters.get("mode") == "range":
         f = f[(f["DATA"] >= filters["date_from"]) & (f["DATA"] <= filters["date_to"])]
     else: # mode == "month"
@@ -602,7 +620,6 @@ def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
         if month and month != "Todos":
             f = f[f["year_month"] == month]
     
-    # 2. Filtro de Categoria
     cats = filters.get("categories", [])
     if cats:
         f = f[f["CATEGORIA"].isin(cats)]
@@ -614,7 +631,7 @@ def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
 def render_kpis(df: pd.DataFrame):
     """
     Renderiza os 3 KPIs principais: Receita, Despesa e Saldo.
-    *** MODIFICADO PARA INCLUIR CORES NOS VALORES ***
+    (MANTIDO COM CORES CUSTOMIZADAS)
     """
     receita = df.loc[df["VALOR_NUM"] > 0, "VALOR_NUM"].sum()
     despesa = df.loc[df["VALOR_NUM"] < 0, "VALOR_NUM"].sum()
@@ -637,7 +654,6 @@ def render_kpis(df: pd.DataFrame):
         st.markdown("<div class='kpi-label'>Saldo (Receita - Despesa)</div>", unsafe_allow_html=True)
         st.markdown(f"<div class='kpi-value-saldo'>{money_fmt_br(saldo)}</div>", unsafe_allow_html=True)
         delta_text = "⬆️ Positivo" if saldo >= 0 else "⬇️ Negativo"
-        # Usamos um st.metric auxiliar para o delta colorido
         st.metric(label="", value="", delta=delta_text, delta_color="normal" if saldo >= 0 else "inverse")
 
 
@@ -681,7 +697,6 @@ def _prepare_export_csv(df: pd.DataFrame) -> str:
 def plot_combined_charts(df: pd.DataFrame):
     """
     Combina os gráficos de barras, pizza e bolhas em um único layout compacto.
-    *** NOVO ***
     """
     st.subheader("Análise por Categoria e Composição")
     
@@ -708,7 +723,7 @@ def plot_combined_charts(df: pd.DataFrame):
 
     st.markdown("---")
     st.subheader("Visão Temporal de Lançamentos (Bolhas)")
-    # Gráfico de Bolhas no centro (combinado)
+    # Gráfico de Bolhas (REINTRODUZIDO AQUI CONFORME O PEDIDO)
     st.plotly_chart(plot_bubble_transacoes(df), use_container_width=True, key="chart_bubble_comb")
 
 
@@ -778,7 +793,7 @@ def main():
         tab_normais, tab_avancados = st.tabs(["📊 Gráficos Principais", "📈 Gráficos Avançados"])
 
         with tab_normais:
-            # *** USO DA NOVA FUNÇÃO COMBINADA ***
+            # USO DA FUNÇÃO COMBINADA COM O GRÁFICO DE BOLHAS INCLUSO
             plot_combined_charts(df_filtered)
 
         with tab_avancados:
