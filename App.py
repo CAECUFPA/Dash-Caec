@@ -1,8 +1,3 @@
-"""
-Dashboard Financeiro Caec — Versão FINAL #5: UI/UX Otimizada (Cards e Cores de KPI)
-Garante que os gráficos fiquem em cards com fundo para se destacar do Blueprint e restaura as cores dos KPIs.
-"""
-
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple, Optional
 
@@ -43,7 +38,6 @@ COLORS = {
 
 DEFAULT_CHART_HEIGHT = 360
 
-# CSS para o Blueprint (Linhas de 1px a cada 20px)
 BLUEPRINT_BACKGROUND_CSS = """
   background-image:
     linear-gradient(0deg, var(--bg-line-color) 1px, transparent 1px),
@@ -53,10 +47,6 @@ BLUEPRINT_BACKGROUND_CSS = """
 """
 
 def get_dynamic_css() -> str:
-    """
-    Gera o CSS dinâmico. Adiciona estilo de card para todos os containers de gráficos e tabelas.
-    """
-    
     css_vars = f"""
     @import url('https://fonts.googleapis.com/css2?family=Anton&family=Six+Caps&family=League+Spartan&family=Open+Sans:wght@400;700&display=swap');
 
@@ -73,6 +63,12 @@ def get_dynamic_css() -> str:
       --sidebar-border: rgba(200, 200, 200, 0.8);
       --bg-line-color: var(--bg-line-color-light);
       --card-padding: 18px; /* Padding ajustado para melhor UX */
+      
+      --st-font-color: #000000;
+      --st-font-color-weak: #4f4f4f;
+      --st-bgs1: #ffffff; /* fundo geral light mode */
+      --st-bgs2: #f9f9f9; /* fundo cards light mode */
+      --st-bgs3: #dbdbdb; /* borda cards light mode */
     }}
 
     @media (prefers-color-scheme: dark) {{
@@ -82,6 +78,12 @@ def get_dynamic_css() -> str:
             --sidebar-bg-transparent: rgba(11, 20, 26, 0.4); 
             --sidebar-border: rgba(44, 54, 65, 0.8);
             --bg-line-color: var(--bg-line-color-dark);
+            
+            --st-font-color: #eaeaea;
+            --st-font-color-weak: #999999;
+            --st-bgs1: #0c1621; /* fundo geral dark mode */
+            --st-bgs2: #13283d; /* fundo cards dark mode */
+            --st-bgs3: #1b3350; /* borda cards dark mode */
         }}
     }}
     
@@ -98,7 +100,7 @@ def get_dynamic_css() -> str:
     }}
 
     /* ------------------------------------------------------------------- */
-    /* 2. Aplicação de Estilos Gerais, Blueprint e Tipografia */
+    /* 2. Estilos Gerais, Blueprint e Tipografia */
     /* ------------------------------------------------------------------- */
 
     .stApp {{
@@ -111,8 +113,7 @@ def get_dynamic_css() -> str:
     /* Títulos e KPI Value */
     h1, h2, h3, h4, .st-emotion-cache-e67m5x, .kpi-value {{ 
         font-family: 'Anton', 'Six Caps', 'League Spartan', sans-serif;
-        /* Corrigido: Remover cor institucional aqui para permitir cores dinâmicas nos KPIs */
-        /* color: var(--caec-azul) !important; */
+        /* Cor definida inline para KPIs */
     }}
     
     /* Título principal mais compacto */
@@ -122,8 +123,7 @@ def get_dynamic_css() -> str:
     /* 3. Estilos de CARD para Gráficos e Tabelas */
     /* ------------------------------------------------------------------- */
 
-    /* Seletores para os containers que envolvem st.plotly_chart e st.dataframe */
-    /* st.columns e st.container (e seus internos) */
+    /* Seletores para os containers de gráficos, tabelas, colunas e containers */
     .st-emotion-cache-1v4f50, .st-emotion-cache-1n743z1, .st-emotion-cache-1d9g9l8 {{
         background: var(--st-bgs2); /* Fundo secundário do tema */
         border: 1px solid var(--st-bgs3);
@@ -134,7 +134,7 @@ def get_dynamic_css() -> str:
         transition: all 0.2s ease-in-out;
     }}
     
-    /* Remover card-style do container de KPIs para não duplicar */
+    /* Evitar card duplo para containers internos de KPIs */
     .st-emotion-cache-1d9g9l8 .st-emotion-cache-1d9g9l8 {{
         background: transparent;
         border: none;
@@ -143,20 +143,19 @@ def get_dynamic_css() -> str:
         box-shadow: none;
     }}
 
-
-    /* Ajusta sub-cabeçalhos dentro do card */
+    /* Ajusta sub-cabeçalhos dentro dos cards */
     .st-emotion-cache-1v4f50 h3, .st-emotion-cache-1n743z1 h3 {{
         margin-top: 0;
         margin-bottom: 1rem;
     }}
 
-    /* Remove fundo de gráficos PLOTLY (para o fundo do card aparecer) */
+    /* Remove fundo padrão dos gráficos plotly para destacar o fundo do card */
     .modebar, .plotly, .js-plotly-plot {{
       background-color: rgba(0,0,0,0) !important;
     }}
 
     /* ------------------------------------------------------------------- */
-    /* 4. Estilos de KPI (Ajuste Final para Cores) */
+    /* 4. Estilos para KPIs */
     /* ------------------------------------------------------------------- */
 
     .kpi-card {{
@@ -170,9 +169,7 @@ def get_dynamic_css() -> str:
       display: flex; 
       flex-direction: column;
       justify-content: space-between; 
-      overflow: hidden; 
-      /* Correção: Remover box-shadow dos KPIs para manter a consistência com o estilo do card */
-      box-shadow: none;
+      overflow: hidden;
     }}
     .kpi-label, .kpi-delta {{ 
         color: var(--st-font-color-weak); 
@@ -181,21 +178,17 @@ def get_dynamic_css() -> str:
     .kpi-value {{ 
         font-size: 26px; 
         font-weight:700; 
-        /* Corrigido: Aplicar a cor dinâmica via style inline no HTML */
     }}
 
     /* Footer */
     footer {{ color: var(--st-font-color-weak); text-align:center; padding-top:10px; }}
-    </style>
     """
-    return f"<style>{css_vars}</style>"
+    return css_vars
 
 st.set_page_config(page_title="Dashboard Financeiro Caec", layout="wide", initial_sidebar_state="expanded",
                    menu_items={"About": "Dashboard Financeiro Caec © 2025"})
 
-# -------------------- UTILITÁRIOS E PRÉ-PROCESSAMENTO (MANTIDOS) --------------------
-# ... (Funções de parsing, formatação, gspread, preprocess_df, load_and_preprocess_data mantidas)
-# ... (Inclua aqui todas as funções que estavam acima)
+# -------------------- UTILITÁRIOS E PRÉ-PROCESSAMENTO --------------------
 
 def parse_val_str_to_float(val) -> float:
     if pd.isna(val) or val == "": return 0.0
@@ -308,7 +301,7 @@ def load_and_preprocess_data() -> Tuple[pd.DataFrame, bool]:
     df_processed = preprocess_df(df_raw)
     return df_processed, header_mismatch
 
-# -------------------- FUNÇÕES DE FILTRO (MANTIDAS) --------------------
+# -------------------- FILTROS --------------------
 
 def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
     f = df.copy()
@@ -323,8 +316,7 @@ def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
         f = f[f["CATEGORIA"].isin(cats)]
     return f.reset_index(drop=True)
 
-# -------------------- PLOTS (MANTIDOS) --------------------
-# ... (Funções de plotagem mantidas, como plot_saldo_acumulado, plot_fluxo_diario, etc.)
+# -------------------- GRÁFICOS --------------------
 
 def _get_empty_fig(text: str = "Sem dados") -> go.Figure:
     fig = go.Figure()
@@ -507,8 +499,7 @@ def plot_boxplot_by_category(df: pd.DataFrame) -> go.Figure:
     fig.update_xaxes(tickangle=-45)
     return fig
 
-# -------------------- SIDEBAR E FILTROS (MANTIDOS) --------------------
-# ... (Função sidebar_filters_and_controls mantida)
+# -------------------- SIDEBAR E FILTROS --------------------
 
 def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
     st.sidebar.title("Dashboard Financeiro Caec")
@@ -551,7 +542,7 @@ def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
     st.sidebar.caption("Criado e administrado pela diretoria de Administração Comercial e Financeiro — by Rick")
     return page, filters
 
-# -------------------- KPIS (AJUSTADO PARA A COR DO VALOR PRINCIPAL) --------------------
+# -------------------- KPIs --------------------
 
 def _sum_period(df: pd.DataFrame, start_dt: datetime, end_dt: datetime, tipo: str = "all") -> float:
     if df.empty: return 0.0
@@ -572,9 +563,6 @@ def _kpi_delta_text_and_color(curr: float, prev: float, positive_is_good: bool =
     return txt, delta_color
 
 def _render_kpi_card_html(title: str, value: str, delta: str, value_color_css_var: str, delta_color: str):
-    """
-    Renderiza o card KPI. value_color_css_var agora é o nome da variável CSS (--kpi-receita, --kpi-despesa, etc.).
-    """
     arrow = "—"
     arrow_color = "var(--st-font-color-weak)"
     if delta_color == "normal":
@@ -584,7 +572,6 @@ def _render_kpi_card_html(title: str, value: str, delta: str, value_color_css_va
         arrow = "▼"
         arrow_color = "var(--kpi-despesa)"
     
-    # CORRIGIDO: O valor principal agora usa a variável CSS de cor (value_color_css_var)
     html = f"""
     <div class="kpi-card">
       <div class="kpi-label">{title}</div>
@@ -646,8 +633,7 @@ def render_kpi_cards(df_full: pd.DataFrame, df_filtered: pd.DataFrame):
             delta_color=color_saldo
         )
 
-# -------------------- TABELA / EXPORT (MANTIDOS) --------------------
-# ... (Funções render_table e _prepare_export_csv mantidas)
+# -------------------- TABELA / EXPORT --------------------
 
 def render_table(df: pd.DataFrame, key: str):
     if df.empty:
@@ -663,11 +649,10 @@ def _prepare_export_csv(df: pd.DataFrame) -> str:
     export_df = df[["DATA","TIPO","CATEGORIA","DESCRIÇÃO","VALOR","OBSERVAÇÃO"]]
     return export_df.to_csv(index=False, encoding="utf-8-sig")
 
-
-# -------------------- MAIN FUNCTION (AJUSTADO COM CARDS) --------------------
+# -------------------- MAIN --------------------
 
 def main():
-    st.markdown(get_dynamic_css(), unsafe_allow_html=True)
+    st.markdown(f"<style>{get_dynamic_css()}</style>", unsafe_allow_html=True)
     st.title("Dashboard Financeiro Caec")
 
     try:
