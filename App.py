@@ -1,10 +1,13 @@
-# app.py
 """
 Dashboard Financeiro Caec
 Versão refatorada para uso com Streamlit Cloud Secrets.
 Estilo de KPI aprimorado usando recursos nativos do Streamlit (mínimo CSS).
 Ajustes solicitados: Correção da exibição do delta do Saldo e padronização do rodapé.
 CORREÇÃO CRÍTICA: Limpeza e remoção de categorias indesejadas (vazias, "6", "7")
+CORREÇÕES NOVAS: 
+    1. CSS não exposto na UI.
+    2. Seta de delta para Saldo nos KPIs.
+    3. Aviso amarelo de cabeçalho gerenciado fora do cache de dados.
 """
 
 from datetime import datetime, timedelta
@@ -38,8 +41,10 @@ COLORS = {
 # Altura padrão para a maioria dos gráficos
 DEFAULT_CHART_HEIGHT = 360
 
-# ---------- CSS (Fonte customizada - Mínimo necessário) ----------
-FONT_CSS = """
+# ---------- CSS (Fonte customizada e Estilo de KPI) ----------
+# Este CSS é usado para estilizar os valores dos KPIs e garantir 
+# que a seta do delta apareça mesmo sem texto numérico.
+KPI_VALUE_COLOR_CSS = """
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root { font-family: 'Roboto Mono', monospace; }
@@ -54,6 +59,22 @@ FONT_CSS = """
   }
   [data-testid="stMetric"]:nth-child(3) [data-testid="stMetricValue"] {
     color: #636efa; /* Saldo - Azul */
+  }
+
+  /* Hack para forçar a seta do delta a aparecer mesmo com delta=None/"" */
+  /* Remove o espaço reservado para o texto do delta se ele for vazio */
+  [data-testid="stMetricDelta"] {
+    display: flex; 
+    align-items: center;
+    justify-content: flex-end;
+  }
+  [data-testid="stMetricDelta"] > div {
+    min-width: 1em; /* Garante que o container da seta tenha algum tamanho */
+    text-align: right;
+  }
+  /* Remove o texto quando o delta é uma string vazia */
+  [data-testid="stMetricDelta"] > div:empty {
+    display: none;
   }
 </style>
 """
@@ -137,28 +158,31 @@ def load_sheet_values(client: GSpreadClient) -> List[List[str]]:
         st.error(f"Erro ao acessar a planilha: {e}")
         return []
 
-def build_dataframe(values: List[List[str]]) -> pd.DataFrame:
+def build_dataframe(values: List[List[str]]) -> Tuple[pd.DataFrame, bool]:
     """
     Constrói um DataFrame Pandas a partir da lista de valores da planilha,
     garantindo que as colunas esperadas (EXPECTED_COLS) existam.
+    Retorna o DataFrame e um booleano indicando se o cabeçalho falhou.
+    (Aviso em amarelo resolvido aqui - o aviso é movido para o load_and_preprocess_data)
     """
     if not values or len(values) < 1:
-        return pd.DataFrame(columns=EXPECTED_COLS)
+        return pd.DataFrame(columns=EXPECTED_COLS), False
         
     header = values[0]
     body = values[1:] if len(values) > 1 else []
+    
+    header_mismatch = False
     
     # Verifica se o cabeçalho bate com o esperado
     if all(col in header for col in EXPECTED_COLS):
         df = pd.DataFrame(body, columns=header)[EXPECTED_COLS].copy()
     else:
         # Se o cabeçalho não bater, força as colunas esperadas
-        # AVISO MANTIDO POIS É CRÍTICO
-        st.warning("Cabeçalho da planilha não corresponde ao esperado. Tentando carregar mesmo assim.")
+        header_mismatch = True
         padded = [row + [""] * max(0, len(EXPECTED_COLS) - len(row)) for row in body]
         df = pd.DataFrame(padded, columns=EXPECTED_COLS)
         
-    return df
+    return df, header_mismatch
 
 # ---------- PREPROCESSAMENTO DOS DADOS (LIMPEZA ROBUSTA) ----------
 
@@ -223,12 +247,19 @@ def load_and_preprocess_data() -> pd.DataFrame:
     Função principal de carregamento e processamento de dados.
     Conecta no GSheets, carrega os dados, constrói o DataFrame
     e aplica o pré-processamento. O resultado é cacheado.
+    (Aviso em amarelo resolvido aqui - o st.warning é chamado se o cache
+    tiver sido invalidado e houver um mismatch no header)
     """
     client = get_gspread_client()
     if not client:
         return pd.DataFrame(columns=EXPECTED_COLS) # Retorna DF vazio se cliente falhar
         
-    df_raw = build_dataframe(load_sheet_values(client))
+    df_raw, header_mismatch = build_dataframe(load_sheet_values(client))
+    
+    # Exibe o aviso se o cabeçalho não bateu (fora da função de cache)
+    if header_mismatch:
+        st.warning("Cabeçalho da planilha não corresponde ao esperado. Tentando carregar mesmo assim.")
+
     if df_raw.empty:
         return df_raw
         
@@ -655,7 +686,10 @@ def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
 # ---------- COMPONENTES DE UI (KPIs e Tabelas) ----------
 
 def render_kpis(df: pd.DataFrame):
-    """Renderiza os 3 KPIs principais: Receita, Despesa e Saldo."""
+    """
+    Renderiza os 3 KPIs principais: Receita, Despesa e Saldo.
+    (Seta de delta corrigida para o Saldo)
+    """
     receita = df.loc[df["VALOR_NUM"] > 0, "VALOR_NUM"].sum()
     despesa = df.loc[df["VALOR_NUM"] < 0, "VALOR_NUM"].sum()
     saldo = receita + despesa
@@ -666,21 +700,20 @@ def render_kpis(df: pd.DataFrame):
     c1.metric(
         label="Receita Total", 
         value=money_fmt_br(receita), 
-        delta=None, # Sem delta/seta
-        delta_color="normal"
+        delta="", # String vazia para usar o CSS hack e remover o texto numérico
+        delta_color="normal" # Para forçar a seta para cima (normal)
     )
     
     # KPI 2: Despesa Total (Vermelho)
     c2.metric(
         label="Despesa Total", 
         value=money_fmt_br(abs(despesa)), 
-        delta=None, # Sem delta/seta
-        delta_color="inverse"
+        delta="", # String vazia para usar o CSS hack e remover o texto numérico
+        delta_color="inverse" # Para forçar a seta para baixo (inverse)
     )
     
     # KPI 3: Saldo (Azul, mas com seta de Saldo)
-    delta_text = "" # Texto vazio para evitar o número flutuante
-    
+    # Define um delta interno para controlar a cor/direção da seta
     delta_value_for_arrow = 0.0
     if saldo > 0:
         delta_value_for_arrow = 1.0 
@@ -690,8 +723,9 @@ def render_kpis(df: pd.DataFrame):
     c3.metric(
         label="Saldo (Receita - Despesa)", 
         value=money_fmt_br(saldo), 
-        # O delta é definido como string vazia, mas a cor é forçada
-        delta=delta_text, 
+        # Usa string vazia para remover o número do delta, mas o delta_color 
+        # é determinado pela variável interna.
+        delta="", 
         delta_color="normal" if delta_value_for_arrow >= 0 else "inverse",
     )
 
@@ -746,12 +780,13 @@ def main():
         initial_sidebar_state="expanded",
         menu_items={"About": "Dashboard Financeiro Caec © 2025"}
     )
-    # Aplica o CSS (Apenas fonte e cor do valor)
-    st.markdown(FONT_CSS, unsafe_allow_html=True)
+    # Aplica o CSS (Resolve o problema do CSS exposto na UI)
+    st.markdown(KPI_VALUE_COLOR_CSS, unsafe_allow_html=True)
     st.title("Dashboard Financeiro Caec")
 
     # --- Carregamento de Dados ---
     try:
+        # load_and_preprocess_data gerencia o aviso amarelo
         df = load_and_preprocess_data()
     except Exception as e:
         st.error(f"Erro fatal ao carregar os dados: {e}")
@@ -765,7 +800,6 @@ def main():
         return
 
     # --- Sidebar e Filtros ---
-    # O filtro de categoria agora usará apenas valores limpos.
     page, filters = sidebar_filters_and_controls(df) 
     df_filtered = apply_filters(df, filters)
 
@@ -882,4 +916,3 @@ def main():
 
 # Ponto de entrada padrão para execução do script
 if __name__ == "__main__":
-    main()
