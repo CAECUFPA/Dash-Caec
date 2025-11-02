@@ -4,6 +4,7 @@ Dashboard Financeiro Caec
 Versão refatorada para uso com Streamlit Cloud Secrets.
 Estilo de KPI aprimorado usando recursos nativos do Streamlit (mínimo CSS).
 Ajustes solicitados: Correção da exibição do delta do Saldo e padronização do rodapé.
+CORREÇÃO CRÍTICA: Limpeza e remoção de categorias indesejadas (vazias, "6", "7")
 """
 
 from datetime import datetime, timedelta
@@ -159,7 +160,7 @@ def build_dataframe(values: List[List[str]]) -> pd.DataFrame:
         
     return df
 
-# ---------- PREPROCESSAMENTO DOS DADOS ----------
+# ---------- PREPROCESSAMENTO DOS DADOS (LIMPEZA ROBUSTA) ----------
 
 def preprocess_df(df_raw: pd.DataFrame) -> pd.DataFrame:
     """
@@ -182,10 +183,30 @@ def preprocess_df(df_raw: pd.DataFrame) -> pd.DataFrame:
     # Infere o tipo pelo valor se estiver vazio
     df.loc[mask_empty_tipo, "TIPO"] = df.loc[mask_empty_tipo, "VALOR_NUM"].apply(lambda v: "Despesa" if v < 0 else "Receita")
     
-    # 4. Limpar e preencher NAs textuais
-    df["CATEGORIA"] = df["CATEGORIA"].fillna("Outros").astype(str).str.strip()
+    # 4. Limpar e preencher NAs textuais (LIMPEZA CRÍTICA DE CATEGORIA)
+    
+    # Força a conversão para string e remove espaços em branco/NaNs
+    df["CATEGORIA"] = df["CATEGORIA"].fillna("").astype(str).str.strip()
     df["DESCRIÇÃO"] = df["DESCRIÇÃO"].fillna("").astype(str).str.strip()
     df["OBSERVAÇÃO"] = df["OBSERVAÇÃO"].fillna("").astype(str).str.strip()
+
+    # Função para verificar se a string é composta apenas por dígitos (e curta)
+    def is_mostly_numeric_or_empty(s):
+        s = str(s)
+        if s == "":
+            return True
+        # Verifica se é uma string numérica curta (como "7" ou "6")
+        if s.isdigit() and len(s) < 5:
+            return True
+        return False
+        
+    # Aplica a limpeza robusta na categoria
+    mask_invalid_cat = df["CATEGORIA"].apply(is_mostly_numeric_or_empty)
+    df.loc[mask_invalid_cat, "CATEGORIA"] = "NÃO CATEGORIZADO"
+    
+    # Limpeza final de Descrição e Observação
+    df.loc[df["DESCRIÇÃO"] == "", "DESCRIÇÃO"] = "N/D"
+    df.loc[df["OBSERVAÇÃO"] == "", "OBSERVAÇÃO"] = "N/D"
     
     # 5. Ordenar e calcular saldo acumulado
     df = df.sort_values("DATA").reset_index(drop=True)
@@ -207,8 +228,7 @@ def load_and_preprocess_data() -> pd.DataFrame:
     if not client:
         return pd.DataFrame(columns=EXPECTED_COLS) # Retorna DF vazio se cliente falhar
         
-    raw_vals = load_sheet_values(client)
-    df_raw = build_dataframe(raw_vals)
+    df_raw = build_dataframe(load_sheet_values(client))
     if df_raw.empty:
         return df_raw
         
@@ -369,8 +389,6 @@ def plot_bubble_transacoes(df: pd.DataFrame) -> go.Figure:
     )
     fig.update_yaxes(title_text="Valor (R$)")
     return fig
-
-# ---------- GRÁFICOS AVANÇADOS ----------
 
 def prepare_ohlc_period(df: pd.DataFrame, freq: str = "D") -> pd.DataFrame:
     """
@@ -556,7 +574,10 @@ def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
     if toggle_multi:
         # Modo Avançado: Multiselect de Categoria + Slider de Data
         st.sidebar.markdown("### Filtros Avançados")
+        # Garante que as categorias sejam válidas
         categories = sorted(df["CATEGORIA"].unique()) if not df.empty else []
+        categories = [c for c in categories if c != ""] # Filtra qualquer string vazia que tenha escapado
+        
         selected_cats = st.sidebar.multiselect(
             "Categorias (múltiplas)", 
             options=categories, 
@@ -588,7 +609,10 @@ def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
         months = ["Todos"] + sorted(df["year_month"].unique(), reverse=True) if not df.empty else ["Todos"]
         selected_month = st.sidebar.selectbox("Mês (ano-mês)", months, key="sb_month")
         
+        # Garante que as categorias sejam válidas
         categories = ["Todos"] + sorted(df["CATEGORIA"].unique()) if not df.empty else ["Todos"]
+        categories = [c for c in categories if c != ""]
+        
         selected_category = st.sidebar.selectbox("Categoria", categories, key="sb_cat_single")
         
         filters["mode"] = "month"
@@ -655,13 +679,8 @@ def render_kpis(df: pd.DataFrame):
     )
     
     # KPI 3: Saldo (Azul, mas com seta de Saldo)
-    # A setinha indica o status (positivo/negativo), mas o valor do delta é vazio
     delta_text = "" # Texto vazio para evitar o número flutuante
     
-    # Usamos um valor "fantasma" como float delta para forçar a seta:
-    # 1. Se saldo > 0: delta_value = 1.0 (seta pra cima, cor normal/verde)
-    # 2. Se saldo < 0: delta_value = -1.0 (seta pra baixo, cor inverse/vermelho)
-    # 3. Se saldo == 0: delta_value = 0.0 (sem seta)
     delta_value_for_arrow = 0.0
     if saldo > 0:
         delta_value_for_arrow = 1.0 
@@ -671,21 +690,10 @@ def render_kpis(df: pd.DataFrame):
     c3.metric(
         label="Saldo (Receita - Despesa)", 
         value=money_fmt_br(saldo), 
-        # O delta real é o texto vazio, mas o Streamlit interpreta o float para a seta
+        # O delta é definido como string vazia, mas a cor é forçada
         delta=delta_text, 
         delta_color="normal" if delta_value_for_arrow >= 0 else "inverse",
     )
-    # FORÇANDO A SETA: Se o Streamlit não pegar o float, voltamos a passar o float e o format_func
-    # ALTERNATIVA para o Saldo (se a acima falhar com a seta):
-    # c3.metric(
-    #     label="Saldo (Receita - Despesa)", 
-    #     value=money_fmt_br(saldo), 
-    #     delta=delta_value_for_arrow,
-    #     delta_color="normal" if delta_value_for_arrow >= 0 else "inverse",
-    #     # Formata o valor do delta para ser invisível/vazio
-    #     help="Delta vazio, cor da seta indica se o saldo é positivo/negativo."
-    # )
-    # A implementação com delta=float e delta_format='...' é a mais robusta.
 
 def render_table(df: pd.DataFrame, key: str):
     """Renderiza a tabela de lançamentos usando st.dataframe."""
@@ -736,7 +744,7 @@ def main():
         page_title="Dashboard Financeiro Caec", 
         layout="wide", 
         initial_sidebar_state="expanded",
-        menu_items={"About": "Dashboard Financeiro Caec © 2025"} # Ajuste de Menu
+        menu_items={"About": "Dashboard Financeiro Caec © 2025"}
     )
     # Aplica o CSS (Apenas fonte e cor do valor)
     st.markdown(FONT_CSS, unsafe_allow_html=True)
@@ -748,7 +756,7 @@ def main():
     except Exception as e:
         st.error(f"Erro fatal ao carregar os dados: {e}")
         st.warning("Verifique a configuração dos Secrets e o formato da planilha.")
-        return # Para a execução se os dados não puderem ser carregados
+        return 
 
     if df.empty:
         st.sidebar.markdown("---")
@@ -757,7 +765,8 @@ def main():
         return
 
     # --- Sidebar e Filtros ---
-    page, filters = sidebar_filters_and_controls(df)
+    # O filtro de categoria agora usará apenas valores limpos.
+    page, filters = sidebar_filters_and_controls(df) 
     df_filtered = apply_filters(df, filters)
 
     # --- KPIs ---
@@ -817,10 +826,10 @@ def main():
             agg_freq = st.selectbox(
                 "Agregação Candlestick", 
                 options=[("Diário","D"), ("Semanal","W"), ("Mensal","M")], 
-                format_func=lambda x: x[0], # Mostra "Diário", usa "D"
+                format_func=lambda x: x[0], 
                 key="sb_candle_freq"
             )
-            freq_code = agg_freq[1] # Pega o código "D", "W" ou "M"
+            freq_code = agg_freq[1] 
             
             st.subheader(f"Análise Candlestick ({agg_freq[0]})")
             st.plotly_chart(plot_candlestick(df_filtered, freq=freq_code), use_container_width=True, key=f"chart_candlestick_{freq_code}")
@@ -866,7 +875,7 @@ def main():
     st.markdown("---")
     st.markdown(
         "<div style='font-size:12px;color:gray;text-align:center'>"
-        "CAEC © 2025 — Criado e administrado pela diretoria de Administração Comercial e Financeiro — **by Rick**" # Ajuste de negrito
+        "CAEC © 2025 — Criado e administrado pela diretoria de Administração Comercial e Financeiro — **by Rick**"
         "</div>", 
         unsafe_allow_html=True
     )
