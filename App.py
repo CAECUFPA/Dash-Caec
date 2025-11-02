@@ -1,5 +1,6 @@
 """
-Dashboard Financeiro Caec — Versão FINAL #4: Correção de Escopo (NameError), Tema Dinâmico, Glassmorphism Funcional.
+Dashboard Financeiro Caec — Versão FINAL #5: UI/UX Otimizada (Cards e Cores de KPI)
+Garante que os gráficos fiquem em cards com fundo para se destacar do Blueprint e restaura as cores dos KPIs.
 """
 
 from datetime import datetime, timedelta
@@ -19,13 +20,12 @@ try:
     from gspread.client import Client as GSpreadClient
     from oauth2client.service_account import ServiceAccountCredentials
 except ImportError:
-    # Classes Mock para rodar sem credenciais/libs se necessário
     class GSpreadClient: pass
     class ServiceAccountCredentials:
         @staticmethod
         def from_json_keyfile_dict(a, b): return None
 
-# -------------------- CONFIGURAÇÃO GERAL E CSS CORRIGIDO (Tema Dinâmico e Glassmorphism) --------------------
+# -------------------- CONFIGURAÇÃO GERAL E CSS CORRIGIDO (Tema Dinâmico, Glassmorphism e Cards) --------------------
 
 EXPECTED_COLS = ["DATA", "TIPO", "CATEGORIA", "DESCRIÇÃO", "VALOR", "OBSERVAÇÃO"]
 
@@ -54,8 +54,7 @@ BLUEPRINT_BACKGROUND_CSS = """
 
 def get_dynamic_css() -> str:
     """
-    Gera o CSS dinâmico, ajustando Glassmorphism e Blueprint
-    baseado no tema Light/Dark do Streamlit via media query e variáveis.
+    Gera o CSS dinâmico. Adiciona estilo de card para todos os containers de gráficos e tabelas.
     """
     
     css_vars = f"""
@@ -72,7 +71,8 @@ def get_dynamic_css() -> str:
       --bg-line-color-light: rgba(200, 200, 200, 0.8);
       --sidebar-bg-transparent: rgba(255, 255, 255, 0.15); 
       --sidebar-border: rgba(200, 200, 200, 0.8);
-      --bg-line-color: var(--bg-line-color-light); 
+      --bg-line-color: var(--bg-line-color-light);
+      --card-padding: 18px; /* Padding ajustado para melhor UX */
     }}
 
     @media (prefers-color-scheme: dark) {{
@@ -97,18 +97,11 @@ def get_dynamic_css() -> str:
         border-right: 1px solid var(--sidebar-border) !important; 
     }}
 
-    /* Garante que o texto da sidebar use a cor de fonte padrão do tema */
-    .st-emotion-cache-1cypk8n *, .st-emotion-cache-1d371w8 * {{
-        color: var(--st-font-color) !important; 
-        font-family: 'Open Sans', sans-serif; 
-    }}
-
     /* ------------------------------------------------------------------- */
     /* 2. Aplicação de Estilos Gerais, Blueprint e Tipografia */
     /* ------------------------------------------------------------------- */
 
     .stApp {{
-      /* Corrigido: Usa a cor de fundo do tema Streamlit e aplica o blueprint */
       background-color: var(--st-bgs1);
       color: var(--st-font-color);
       font-family: 'Open Sans', sans-serif; 
@@ -118,16 +111,57 @@ def get_dynamic_css() -> str:
     /* Títulos e KPI Value */
     h1, h2, h3, h4, .st-emotion-cache-e67m5x, .kpi-value {{ 
         font-family: 'Anton', 'Six Caps', 'League Spartan', sans-serif;
-        color: var(--caec-azul) !important;
+        /* Corrigido: Remover cor institucional aqui para permitir cores dinâmicas nos KPIs */
+        /* color: var(--caec-azul) !important; */
     }}
     
+    /* Título principal mais compacto */
+    h1 {{ margin-top: 0rem; margin-bottom: 1rem; }}
+    
     /* ------------------------------------------------------------------- */
-    /* 3. Estilos de KPI (Ajuste de Fundo e Borda para o tema) */
+    /* 3. Estilos de CARD para Gráficos e Tabelas */
+    /* ------------------------------------------------------------------- */
+
+    /* Seletores para os containers que envolvem st.plotly_chart e st.dataframe */
+    /* st.columns e st.container (e seus internos) */
+    .st-emotion-cache-1v4f50, .st-emotion-cache-1n743z1, .st-emotion-cache-1d9g9l8 {{
+        background: var(--st-bgs2); /* Fundo secundário do tema */
+        border: 1px solid var(--st-bgs3);
+        border-radius: 8px;
+        padding: var(--card-padding); 
+        margin-bottom: 1.5rem; /* Espaçamento entre cards */
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        transition: all 0.2s ease-in-out;
+    }}
+    
+    /* Remover card-style do container de KPIs para não duplicar */
+    .st-emotion-cache-1d9g9l8 .st-emotion-cache-1d9g9l8 {{
+        background: transparent;
+        border: none;
+        padding: 0;
+        margin-bottom: 0;
+        box-shadow: none;
+    }}
+
+
+    /* Ajusta sub-cabeçalhos dentro do card */
+    .st-emotion-cache-1v4f50 h3, .st-emotion-cache-1n743z1 h3 {{
+        margin-top: 0;
+        margin-bottom: 1rem;
+    }}
+
+    /* Remove fundo de gráficos PLOTLY (para o fundo do card aparecer) */
+    .modebar, .plotly, .js-plotly-plot {{
+      background-color: rgba(0,0,0,0) !important;
+    }}
+
+    /* ------------------------------------------------------------------- */
+    /* 4. Estilos de KPI (Ajuste Final para Cores) */
     /* ------------------------------------------------------------------- */
 
     .kpi-card {{
-      background: var(--st-bgs2); /* Fundo secundário do tema */
-      border: 1px solid var(--st-bgs3); /* Borda mais sutil do tema */
+      background: var(--st-bgs2); 
+      border: 1px solid var(--st-bgs3);
       border-radius: 8px;
       padding: 12px 14px;
       box-shadow: none;
@@ -137,27 +171,20 @@ def get_dynamic_css() -> str:
       flex-direction: column;
       justify-content: space-between; 
       overflow: hidden; 
+      /* Correção: Remover box-shadow dos KPIs para manter a consistência com o estilo do card */
+      box-shadow: none;
     }}
     .kpi-label, .kpi-delta {{ 
-        color: var(--st-font-color-weak); /* Cor do texto secundário do tema */
+        color: var(--st-font-color-weak); 
         font-size: 13px;
     }}
     .kpi-value {{ 
         font-size: 26px; 
         font-weight:700; 
+        /* Corrigido: Aplicar a cor dinâmica via style inline no HTML */
     }}
 
-    /* ------------------------------------------------------------------- */
-    /* 4. Ajustes Finais */
-    /* ------------------------------------------------------------------- */
-
-    /* Remove fundo de gráficos (para o Blueprint aparecer) */
-    .modebar, .plotly, .js-plotly-plot {{
-      background-color: rgba(0,0,0,0) !important;
-    }}
-    
-    /* Título principal mais compacto */
-    h1 {{ margin-top: 0rem; margin-bottom: 1rem; }}
+    /* Footer */
     footer {{ color: var(--st-font-color-weak); text-align:center; padding-top:10px; }}
     </style>
     """
@@ -166,7 +193,9 @@ def get_dynamic_css() -> str:
 st.set_page_config(page_title="Dashboard Financeiro Caec", layout="wide", initial_sidebar_state="expanded",
                    menu_items={"About": "Dashboard Financeiro Caec © 2025"})
 
-# -------------------- UTILITÁRIOS E PRÉ-PROCESSAMENTO --------------------
+# -------------------- UTILITÁRIOS E PRÉ-PROCESSAMENTO (MANTIDOS) --------------------
+# ... (Funções de parsing, formatação, gspread, preprocess_df, load_and_preprocess_data mantidas)
+# ... (Inclua aqui todas as funções que estavam acima)
 
 def parse_val_str_to_float(val) -> float:
     if pd.isna(val) or val == "": return 0.0
@@ -279,10 +308,9 @@ def load_and_preprocess_data() -> Tuple[pd.DataFrame, bool]:
     df_processed = preprocess_df(df_raw)
     return df_processed, header_mismatch
 
-# -------------------- FUNÇÕES DE FILTRO (MOVIDAS PARA CIMA) --------------------
+# -------------------- FUNÇÕES DE FILTRO (MANTIDAS) --------------------
 
 def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
-    """Aplica os filtros de Mês/Categoria ou Range/Múltiplas Categorias."""
     f = df.copy()
     if filters.get("mode") == "range":
         f = f[(f["DATA"] >= filters["date_from"]) & (f["DATA"] <= filters["date_to"])]
@@ -295,7 +323,8 @@ def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
         f = f[f["CATEGORIA"].isin(cats)]
     return f.reset_index(drop=True)
 
-# -------------------- PLOTS --------------------
+# -------------------- PLOTS (MANTIDOS) --------------------
+# ... (Funções de plotagem mantidas, como plot_saldo_acumulado, plot_fluxo_diario, etc.)
 
 def _get_empty_fig(text: str = "Sem dados") -> go.Figure:
     fig = go.Figure()
@@ -478,7 +507,8 @@ def plot_boxplot_by_category(df: pd.DataFrame) -> go.Figure:
     fig.update_xaxes(tickangle=-45)
     return fig
 
-# -------------------- SIDEBAR E FILTROS --------------------
+# -------------------- SIDEBAR E FILTROS (MANTIDOS) --------------------
+# ... (Função sidebar_filters_and_controls mantida)
 
 def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
     st.sidebar.title("Dashboard Financeiro Caec")
@@ -521,7 +551,7 @@ def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
     st.sidebar.caption("Criado e administrado pela diretoria de Administração Comercial e Financeiro — by Rick")
     return page, filters
 
-# -------------------- KPIS --------------------
+# -------------------- KPIS (AJUSTADO PARA A COR DO VALOR PRINCIPAL) --------------------
 
 def _sum_period(df: pd.DataFrame, start_dt: datetime, end_dt: datetime, tipo: str = "all") -> float:
     if df.empty: return 0.0
@@ -541,7 +571,10 @@ def _kpi_delta_text_and_color(curr: float, prev: float, positive_is_good: bool =
     else: delta_color = "normal" if (diff > 0) == positive_is_good else "inverse"
     return txt, delta_color
 
-def _render_kpi_card_html(title: str, value: str, delta: str, value_color: str, delta_color: str):
+def _render_kpi_card_html(title: str, value: str, delta: str, value_color_css_var: str, delta_color: str):
+    """
+    Renderiza o card KPI. value_color_css_var agora é o nome da variável CSS (--kpi-receita, --kpi-despesa, etc.).
+    """
     arrow = "—"
     arrow_color = "var(--st-font-color-weak)"
     if delta_color == "normal":
@@ -550,10 +583,12 @@ def _render_kpi_card_html(title: str, value: str, delta: str, value_color: str, 
     elif delta_color == "inverse":
         arrow = "▼"
         arrow_color = "var(--kpi-despesa)"
+    
+    # CORRIGIDO: O valor principal agora usa a variável CSS de cor (value_color_css_var)
     html = f"""
     <div class="kpi-card">
       <div class="kpi-label">{title}</div>
-      <div class="kpi-value" style="color:{value_color};">{value}</div>
+      <div class="kpi-value" style="color:{value_color_css_var};">{value}</div>
       <div class="kpi-delta"><span style="color:{arrow_color}; font-weight:700;">{arrow}</span><span style="color:var(--st-font-color-weak);"> {delta}</span></div>
     </div>
     """
@@ -591,7 +626,7 @@ def render_kpi_cards(df_full: pd.DataFrame, df_filtered: pd.DataFrame):
             title="Receita Total (Período Filtrado)",
             value=money_fmt_br(receita_filtrada),
             delta=f"Últimos 30d: {txt_rec_delta}",
-            value_color="var(--kpi-receita)", 
+            value_color_css_var="var(--kpi-receita)", 
             delta_color=color_rec
         )
     with c2:
@@ -599,7 +634,7 @@ def render_kpi_cards(df_full: pd.DataFrame, df_filtered: pd.DataFrame):
             title="Despesa Total (Período Filtrado)",
             value=money_fmt_br(abs(despesa_filtrada)),
             delta=f"Últimos 30d: {txt_dep_delta}",
-            value_color="var(--kpi-despesa)",
+            value_color_css_var="var(--kpi-despesa)",
             delta_color=color_dep
         )
     with c3:
@@ -607,11 +642,12 @@ def render_kpi_cards(df_full: pd.DataFrame, df_filtered: pd.DataFrame):
             title="Saldo Total (Período Filtrado)",
             value=money_fmt_br(saldo_filtrado),
             delta=f"Últimos 30d: {txt_saldo_delta}",
-            value_color="var(--kpi-saldo)", 
+            value_color_css_var="var(--kpi-saldo)", 
             delta_color=color_saldo
         )
 
-# -------------------- TABELA / EXPORT --------------------
+# -------------------- TABELA / EXPORT (MANTIDOS) --------------------
+# ... (Funções render_table e _prepare_export_csv mantidas)
 
 def render_table(df: pd.DataFrame, key: str):
     if df.empty:
@@ -627,7 +663,8 @@ def _prepare_export_csv(df: pd.DataFrame) -> str:
     export_df = df[["DATA","TIPO","CATEGORIA","DESCRIÇÃO","VALOR","OBSERVAÇÃO"]]
     return export_df.to_csv(index=False, encoding="utf-8-sig")
 
-# -------------------- MAIN FUNCTION --------------------
+
+# -------------------- MAIN FUNCTION (AJUSTADO COM CARDS) --------------------
 
 def main():
     st.markdown(get_dynamic_css(), unsafe_allow_html=True)
@@ -636,7 +673,6 @@ def main():
     try:
         df_full, header_mismatch = load_and_preprocess_data()
     except Exception as e:
-        # Mock data se a importação falhar
         mock_data = {
             "DATA": [datetime.now() - timedelta(days=d) for d in range(60)] * 2,
             "TIPO": ["Receita"] * 60 + ["Despesa"] * 60,
@@ -654,88 +690,105 @@ def main():
         st.warning("Planilha vazia ou erro ao importar dados. Verifique a planilha/credenciais.")
         return
 
-    # 1. Obter filtros e página (Chama sidebar_filters_and_controls)
     page, filters = sidebar_filters_and_controls(df_full)
-    
-    # 2. Aplicar filtros (Chama apply_filters - que agora está definida acima)
     df_filtered = apply_filters(df_full, filters)
 
     category_colors = get_category_color_map(df_filtered)
 
-    # 3. Renderizar o corpo do Dashboard
     render_kpi_cards(df_full, df_filtered)
     st.markdown("---")
 
     if page == "Resumo Financeiro":
-        st.subheader("Evolução do Saldo Acumulado")
-        st.plotly_chart(plot_saldo_acumulado(df_filtered), use_container_width=True, config={'displayModeBar': False}, key="chart_saldo_line_resumo")
+        
+        # CARD 1: Saldo Acumulado
+        with st.container():
+            st.subheader("Evolução do Saldo Acumulado")
+            st.plotly_chart(plot_saldo_acumulado(df_filtered), use_container_width=True, config={'displayModeBar': False}, key="chart_saldo_line_resumo")
 
-        st.subheader("Fluxo de Caixa Diário")
-        st.plotly_chart(plot_fluxo_diario(df_filtered), use_container_width=True, config={'displayModeBar': False}, key="chart_fluxo_bar_resumo")
+        # CARD 2: Fluxo de Caixa Diário
+        with st.container():
+            st.subheader("Fluxo de Caixa Diário")
+            st.plotly_chart(plot_fluxo_diario(df_filtered), use_container_width=True, config={'displayModeBar': False}, key="chart_fluxo_bar_resumo")
 
-        st.subheader("Lançamentos Recentes (Últimos 10)")
-        recent = df_filtered.sort_values("DATA", ascending=False).head(10)
-        render_table(recent, key="table_recent_resumo")
+        # CARD 3: Lançamentos Recentes
+        with st.container():
+            st.subheader("Lançamentos Recentes (Últimos 10)")
+            recent = df_filtered.sort_values("DATA", ascending=False).head(10)
+            render_table(recent, key="table_recent_resumo")
+            csv = _prepare_export_csv(df_filtered)
+            st.download_button("Exportar CSV (Filtro Atual)", csv, file_name="caec_resumo_export.csv", mime="text/csv", key="download_resumo")
 
-        csv = _prepare_export_csv(df_filtered)
-        st.download_button("Exportar CSV (Filtro Atual)", csv, file_name="caec_resumo_export.csv", mime="text/csv", key="download_resumo")
 
     else:
         tab_normais, tab_avancados, tab_tabela = st.tabs(["📊 Gráficos Principais", "📈 Análise Avançada", "📋 Tabela Completa"])
         with tab_normais:
-            st.markdown("### 💰 Composição Financeira por Categoria")
-            col1, col2 = st.columns(2)
             
-            with col1:
-                st.plotly_chart(plot_categoria_barras(df_filtered, kind="Receita", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_rec_bar_comb")
-            with col2:
-                st.plotly_chart(plot_categoria_barras(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_dep_bar_comb")
+            # CARD 1: Barras de Composição e Treemap
+            with st.container():
+                st.markdown("### 💰 Composição Financeira por Categoria")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.plotly_chart(plot_categoria_barras(df_filtered, kind="Receita", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_rec_bar_comb")
+                with col2:
+                    st.plotly_chart(plot_categoria_barras(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_dep_bar_comb")
 
-            col3, col4 = st.columns(2)
-            with col3:
-                st.plotly_chart(plot_treemap_composicao(df_filtered, kind="Receita", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_treemap_rec_comb")
-            with col4:
-                st.plotly_chart(plot_treemap_composicao(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_treemap_dep_comb")
+            with st.container():
+                col3, col4 = st.columns(2)
+                with col3:
+                    st.plotly_chart(plot_treemap_composicao(df_filtered, kind="Receita", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_treemap_rec_comb")
+                with col4:
+                    st.plotly_chart(plot_treemap_composicao(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_treemap_dep_comb")
 
-            st.markdown("---")
-            st.subheader("Visão Temporal de Lançamentos (por Categoria)")
-            st.plotly_chart(plot_bubble_transacoes_categoria_y(df_filtered, category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_bubble_cat_y")
-            st.markdown("---")
-            st.subheader("Visão Detalhada de Transações")
-            st.plotly_chart(plot_bubble_transacoes_valor_y(df_filtered, category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_bubble_valor_y")
+            # CARD 2: Visão Temporal Categoria Y
+            with st.container():
+                st.subheader("Visão Temporal de Lançamentos (por Categoria)")
+                st.plotly_chart(plot_bubble_transacoes_categoria_y(df_filtered, category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_bubble_cat_y")
+
+            # CARD 3: Visão Detalhada Valor Y
+            with st.container():
+                st.subheader("Visão Detalhada de Transações")
+                st.plotly_chart(plot_bubble_transacoes_valor_y(df_filtered, category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_bubble_valor_y")
 
         with tab_avancados:
-            agg_freq = st.selectbox("Agregação Candlestick", options=[("Diário","D"), ("Semanal","W"), ("Mensal","M")], format_func=lambda x: x[0], key="sb_candle_freq")
-            freq_code = agg_freq[1]
-            st.subheader(f"Análise Candlestick ({agg_freq[0]}) e Volume")
-            st.plotly_chart(plot_candlestick(df_filtered, freq=freq_code), use_container_width=True, config={'displayModeBar': False}, key=f"chart_candlestick_{freq_code}")
+            
+            # CARD 1: Candlestick
+            with st.container():
+                agg_freq = st.selectbox("Agregação Candlestick", options=[("Diário","D"), ("Semanal","W"), ("Mensal","M")], format_func=lambda x: x[0], key="sb_candle_freq")
+                freq_code = agg_freq[1]
+                st.subheader(f"Análise Candlestick ({agg_freq[0]}) e Volume")
+                st.plotly_chart(plot_candlestick(df_filtered, freq=freq_code), use_container_width=True, config={'displayModeBar': False}, key=f"chart_candlestick_{freq_code}")
 
-            st.markdown("---")
+            # CARD 2: Fluxo/SMA e Boxplot
             col1, col2 = st.columns(2)
             with col1:
-                st.subheader("Fluxo Diário com Média Móvel (14 dias)")
-                fluxo = df_filtered.groupby(df_filtered["DATA"].dt.date)["VALOR_NUM"].sum().reset_index()
-                fluxo["DATA"] = pd.to_datetime(fluxo["DATA"])
-                fluxo["sma14"] = fluxo["VALOR_NUM"].rolling(window=14, min_periods=1).mean()
-                fig_ma = go.Figure()
-                cores_fluxo = [COLORS["receita"] if v >= 0 else COLORS["despesa"] for v in fluxo["VALOR_NUM"]]
-                fig_ma.add_trace(go.Bar(x=fluxo["DATA"], y=fluxo["VALOR_NUM"], name="Fluxo Diário", marker_color=cores_fluxo))
-                fig_ma.add_trace(go.Scatter(x=fluxo["DATA"], y=fluxo["sma14"], mode="lines", name="SMA14 (14 dias)", line=dict(color=COLORS["trend"])))
-                fig_ma.update_layout(height=DEFAULT_CHART_HEIGHT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-                st.plotly_chart(fig_ma, use_container_width=True, config={'displayModeBar': False}, key="chart_sma14_avancado")
+                with st.container():
+                    st.subheader("Fluxo Diário com Média Móvel (14 dias)")
+                    fluxo = df_filtered.groupby(df_filtered["DATA"].dt.date)["VALOR_NUM"].sum().reset_index()
+                    fluxo["DATA"] = pd.to_datetime(fluxo["DATA"])
+                    fluxo["sma14"] = fluxo["VALOR_NUM"].rolling(window=14, min_periods=1).mean()
+                    fig_ma = go.Figure()
+                    cores_fluxo = [COLORS["receita"] if v >= 0 else COLORS["despesa"] for v in fluxo["VALOR_NUM"]]
+                    fig_ma.add_trace(go.Bar(x=fluxo["DATA"], y=fluxo["VALOR_NUM"], name="Fluxo Diário", marker_color=cores_fluxo))
+                    fig_ma.add_trace(go.Scatter(x=fluxo["DATA"], y=fluxo["sma14"], mode="lines", name="SMA14 (14 dias)", line=dict(color=COLORS["trend"])))
+                    fig_ma.update_layout(height=DEFAULT_CHART_HEIGHT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                    st.plotly_chart(fig_ma, use_container_width=True, config={'displayModeBar': False}, key="chart_sma14_avancado")
             with col2:
-                st.subheader("Distribuição de Valores por Categoria (Boxplot)")
-                st.plotly_chart(plot_boxplot_by_category(df_filtered), use_container_width=True, config={'displayModeBar': False}, key="chart_box_avancado")
+                with st.container():
+                    st.subheader("Distribuição de Valores por Categoria (Boxplot)")
+                    st.plotly_chart(plot_boxplot_by_category(df_filtered), use_container_width=True, config={'displayModeBar': False}, key="chart_box_avancado")
 
-            st.markdown("---")
-            st.subheader("Heatmap de Saldo Diário")
-            st.plotly_chart(plot_monthly_heatmap(df_filtered), use_container_width=True, config={'displayModeBar': False}, key="chart_heatmap_avancado")
+            # CARD 3: Heatmap
+            with st.container():
+                st.subheader("Heatmap de Saldo Diário")
+                st.plotly_chart(plot_monthly_heatmap(df_filtered), use_container_width=True, config={'displayModeBar': False}, key="chart_heatmap_avancado")
 
         with tab_tabela:
-            st.subheader("Todos os Lançamentos (Filtro Atual)")
-            render_table(df_filtered, key="table_full_detalhado")
-            csv = _prepare_export_csv(df_filtered)
-            st.download_button("Exportar CSV (Filtro Atual)", csv, file_name="caec_full_export.csv", mime="text/csv", key="download_full")
+            # CARD 4: Tabela Completa
+            with st.container():
+                st.subheader("Todos os Lançamentos (Filtro Atual)")
+                render_table(df_filtered, key="table_full_detalhado")
+                csv = _prepare_export_csv(df_filtered)
+                st.download_button("Exportar CSV (Filtro Atual)", csv, file_name="caec_full_export.csv", mime="text/csv", key="download_full")
 
     st.markdown("---")
     st.markdown(f"<div style='text-align:center;color:var(--st-font-color-weak);'>CAEC © 2025 — Criado e administrado pela diretoria de Administração Comercial e Financeiro — <strong>by Rick</strong></div>", unsafe_allow_html=True)
