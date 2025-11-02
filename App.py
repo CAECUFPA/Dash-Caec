@@ -1,5 +1,5 @@
 """
-Dashboard Financeiro Caec — Versão FINAL/OTIMIZADA: Blueprint Mais Visível e Gráficos de Rosca (Donut) com %.
+Dashboard Financeiro Caec — Versão FINAL #2: KPIs Responsivos, Blueprint Visível, Sidebar Transparente e Stacked Bar Chart.
 Paleta institucional e fontes aplicadas.
 """
 
@@ -25,7 +25,7 @@ except ImportError:
         @staticmethod
         def from_json_keyfile_dict(a, b): return None
 
-# -------------------- CONFIGURAÇÃO GERAL E CSS CORRIGIDO (Blueprint + Evidente) --------------------
+# -------------------- CONFIGURAÇÃO GERAL E CSS CORRIGIDO (Blueprint + Sidebar + KPIs) --------------------
 
 EXPECTED_COLS = ["DATA", "TIPO", "CATEGORIA", "DESCRIÇÃO", "VALOR", "OBSERVAÇÃO"]
 
@@ -45,11 +45,11 @@ COLORS = {
 
 DEFAULT_CHART_HEIGHT = 360
 
-# NOVO BLUEPRINT: Aumentando a opacidade das linhas para 0.4 (de 0.1)
+# NOVO BLUEPRINT: Aumentando a opacidade das linhas para 0.6 (de 0.4) para mais visibilidade
 BLUEPRINT_BACKGROUND_CSS = """
   background-image:
-    linear-gradient(0deg, var(--bg-line-rgba-04) 1px, transparent 1px),
-    linear-gradient(90deg, var(--bg-line-rgba-04) 1px, transparent 1px);
+    linear-gradient(0deg, var(--bg-line-rgba-06) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bg-line-rgba-06) 1px, transparent 1px);
   background-size: 20px 20px;
   background-position: -1px -1px;
 """
@@ -78,7 +78,7 @@ MINIMAL_CSS = f"""
   --text-main: {INSTITUTIONAL['preto']};
   --text-secondary: #6c757d;
   --card-border: #e0e0e0;
-  --bg-line-rgba-04: rgba(224, 224, 224, 0.4); /* Linhas CLARAS mais visíveis */
+  --bg-line-rgba-06: rgba(224, 224, 224, 0.6); /* Linhas CLARAS ainda mais visíveis */
 }}
 
 /* Modo ESCURO */
@@ -89,7 +89,7 @@ MINIMAL_CSS = f"""
         --text-main: #e6e6e6;
         --text-secondary: #bfc9d3;
         --card-border: #2c3641;
-        --bg-line-rgba-04: rgba(44, 54, 65, 0.4); /* Linhas ESCURAS mais visíveis */
+        --bg-line-rgba-06: rgba(44, 54, 65, 0.6); /* Linhas ESCURAS ainda mais visíveis */
     }}
 }}
 
@@ -110,20 +110,21 @@ h1, h2, h3, h4, .st-emotion-cache-e67m5x, .kpi-value {{
     color: var(--caec-azul);
 }}
 
-/* Sidebar - Fundo transparente (MANTIDO) */
-.st-emotion-cache-vk34a3, .st-emotion-cache-1cypk8n {{
+/* Sidebar - Fundo transparente (CORRIGIDO) */
+/* Usando o seletor mais genérico para a sidebar e garantindo !important */
+.st-emotion-cache-vk34a3, .st-emotion-cache-1d371w8, .st-emotion-cache-1cypk8n {{ /* Adicionado 1d371w8 */
     background-color: transparent !important;
     border-right: none !important; 
 }}
 
 /* Sidebar texto */
-.st-emotion-cache-1cypk8n, .st-emotion-cache-1cypk8n * {{
+.st-emotion-cache-1cypk8n, .st-emotion-cache-1cypk8n *, .st-emotion-cache-1d371w8, .st-emotion-cache-1d371w8 * {{
     color: var(--text-main);
     font-family: 'Open Sans', sans-serif; 
 }}
 
 /* ------------------------------------------------------------------- */
-/* 3. ESTILOS DE KPI */
+/* 3. ESTILOS DE KPI (CORRIGIDO PARA RESPONSIVIDADE) */
 /* ------------------------------------------------------------------- */
 
 .kpi-card {{
@@ -137,10 +138,35 @@ h1, h2, h3, h4, .st-emotion-cache-e67m5x, .kpi-value {{
   display: flex; 
   flex-direction: column;
   justify-content: space-between; 
+  overflow: hidden; /* Garante que nada transborde */
 }}
-.kpi-label {{ font-size: 13px; color: var(--text-secondary); margin-bottom:auto; }}
-.kpi-value {{ font-size: 26px; font-weight:700; margin-top: 4px; }}
-.kpi-delta {{ font-size:12px; color:var(--text-secondary); margin-top: auto; display:flex; gap:8px; align-items:center; }}
+.kpi-label {{ 
+    font-size: 13px; 
+    color: var(--text-secondary); 
+    margin-bottom:auto; 
+    white-space: nowrap; /* Impede quebra de linha no label */
+    overflow: hidden; /* Esconde se transbordar */
+    text-overflow: ellipsis; /* Adiciona '...' se escondido */
+}}
+.kpi-value {{ 
+    font-size: 26px; 
+    font-weight:700; 
+    margin-top: 4px; 
+    white-space: nowrap; /* Impede quebra de linha no valor */
+    overflow: hidden;
+    text-overflow: ellipsis;
+}}
+.kpi-delta {{ 
+    font-size:12px; 
+    color:var(--text-secondary); 
+    margin-top: auto; 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    white-space: nowrap; /* Impede quebra de linha no delta */
+    overflow: hidden;
+    text-overflow: ellipsis;
+}}
 .kpi-arrow-up {{ color: var(--kpi-receita); font-weight:700; }}
 .kpi-arrow-down {{ color: var(--kpi-despesa); font-weight:700; }}
 
@@ -276,7 +302,7 @@ def load_and_preprocess_data() -> Tuple[pd.DataFrame, bool]:
     df_processed = preprocess_df(df_raw)
     return df_processed, header_mismatch
 
-# -------------------- PLOTS (DONUT/ROSCA NO LUGAR DO TREEMAP) --------------------
+# -------------------- PLOTS (STACKED BAR NO LUGAR DO DONUT) --------------------
 
 def _get_empty_fig(text: str = "Sem dados") -> go.Figure:
     fig = go.Figure()
@@ -329,8 +355,8 @@ def plot_categoria_barras(df: pd.DataFrame, kind: str = "Receita", category_colo
     fig.update_yaxes(title_text="Categoria")
     return fig
 
-# NOVO: Função de Plotly para Gráfico de Rosca (Donut) com Porcentagem
-def plot_donut_composicao(df: pd.DataFrame, kind: str = "Receita", category_colors: Dict[str,str]=None) -> go.Figure:
+# NOVO: Gráfico de Barras Empilhadas para Composição
+def plot_stacked_bar_composicao(df: pd.DataFrame, kind: str = "Receita", category_colors: Dict[str,str]=None) -> go.Figure:
     if kind == "Receita":
         df_plot = df[df["VALOR_NUM"] > 0].groupby("CATEGORIA")["VALOR_NUM"].sum().reset_index()
         df_plot.columns = ["CATEGORIA", "VALOR"]
@@ -341,25 +367,33 @@ def plot_donut_composicao(df: pd.DataFrame, kind: str = "Receita", category_colo
     if df_plot.empty:
         return _get_empty_fig(f"Sem dados de {kind}")
 
-    # Plotly Donut Chart
-    fig = go.Figure(data=[go.Pie(
-        labels=df_plot['CATEGORIA'],
-        values=df_plot['VALOR'],
-        hole=.4, # Define como Donut
-        marker=dict(colors=[category_colors.get(c, COLORS['neutral']) for c in df_plot['CATEGORIA']]),
-        hovertemplate="%{label}: R$ %{value:,.2f} (%{percent})<extra></extra>",
-        textinfo='label+percent', # Exibe Rótulo e Porcentagem
-        insidetextorientation='radial'
-    )])
+    # Calcula porcentagens para hover text
+    total_valor = df_plot['VALOR'].sum()
+    df_plot['PORCENTAGEM'] = (df_plot['VALOR'] / total_valor) * 100 if total_valor > 0 else 0
+
+    fig = px.bar(df_plot, 
+                 x='VALOR', 
+                 y=px.Constant("Composição"), # Eixo Y constante para empilhar
+                 color='CATEGORIA',
+                 orientation='h',
+                 color_discrete_map=category_colors,
+                 text_auto='.1s', # Exibe o valor ou porcentagem automaticamente
+                 hover_data={'CATEGORIA':True, 'VALOR':':,.2f', 'PORCENTAGEM':':.1ff'}, # Detalhes no hover
+                 title=f'Composição de {kind} (Barras Empilhadas)')
 
     fig.update_layout(
         height=DEFAULT_CHART_HEIGHT, 
         paper_bgcolor="rgba(0,0,0,0)", 
         plot_bgcolor="rgba(0,0,0,0)",
-        title=f'Composição de {kind} (Setor)',
-        margin=dict(t=50, b=50, l=10, r=10), # Ajustar margens para melhor visualização
-        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.05) # Mover legenda para a direita
+        barmode='stack', # Garante que as barras sejam empilhadas
+        xaxis_title="Valor (R$)",
+        yaxis_title="", # Remove o título do eixo Y, pois é "Composição"
+        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.05), # Legenda à direita
+        hovermode="x unified" # Melhor visualização do hover
     )
+    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.15)')
+    fig.update_yaxes(showgrid=False) # Remove grid do eixo Y
+    fig.update_traces(textposition='inside', insidetextanchor='middle') # Centraliza texto dentro das barras
     return fig
 
 # Funções de análise avançada (mantidas)
@@ -669,12 +703,12 @@ def main():
             with col2:
                 st.plotly_chart(plot_categoria_barras(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_dep_bar_comb")
 
-            # Gráficos de Rosca (Donut) - NOVO/CORRIGIDO
+            # Gráficos de Barras Empilhadas (Stacked Bar Chart) - NOVO
             col3, col4 = st.columns(2)
             with col3:
-                st.plotly_chart(plot_donut_composicao(df_filtered, kind="Receita", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_donut_rec_comb")
+                st.plotly_chart(plot_stacked_bar_composicao(df_filtered, kind="Receita", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_stacked_rec_comb")
             with col4:
-                st.plotly_chart(plot_donut_composicao(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_donut_dep_comb")
+                st.plotly_chart(plot_stacked_bar_composicao(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_stacked_dep_comb")
 
             st.markdown("---")
             st.subheader("Visão Temporal de Lançamentos (por Categoria)")
