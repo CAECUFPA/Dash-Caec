@@ -15,6 +15,7 @@ try:
     from gspread.client import Client as GSpreadClient
     from oauth2client.service_account import ServiceAccountCredentials
 except ImportError:
+    # Classes de placeholder para ambientes sem as dependências
     class GSpreadClient: pass
     class ServiceAccountCredentials:
         @staticmethod
@@ -49,7 +50,7 @@ BLUEPRINT_BACKGROUND_CSS = """
 
 def get_dynamic_css() -> str:
     """
-    Gera o CSS dinâmico. CORRIGIDO: Cores de H1 e Bordas de Cards.
+    Gera o CSS dinâmico. CORRIGIDO: Cores de H1 e Bordas de Cards/Gráficos.
     """
     
     css_vars = f"""
@@ -68,7 +69,7 @@ def get_dynamic_css() -> str:
       --sidebar-border: rgba(200, 200, 200, 0.8);
       --bg-line-color: var(--bg-line-color-light);
       --card-padding: 18px; 
-      --h1-color: #000000; /* Preto forte para Light Mode */
+      --h1-color: #000000; /* Preto forte para Light Mode (Solicitado) */
       --kpi-label-color: var(--st-font-color); /* Usa a cor de texto padrão do tema (Escuro no Light Mode) */
     }}
 
@@ -79,7 +80,7 @@ def get_dynamic_css() -> str:
             --sidebar-bg-transparent: rgba(11, 20, 26, 0.4); 
             --sidebar-border: rgba(44, 54, 65, 0.8);
             --bg-line-color: var(--bg-line-color-dark);
-            --h1-color: #FFFFFF; /* Branco forte para Dark Mode */
+            --h1-color: #FFFFFF; /* Branco forte para Dark Mode (Solicitado) */
             --kpi-label-color: var(--st-font-color-weak); /* Usa a cor de texto fraca do tema (Claro no Dark Mode) */
         }}
     }}
@@ -131,9 +132,9 @@ def get_dynamic_css() -> str:
 
     /* Seletores para os containers de COLUMNS, TABS e CONTAINER (que encapsulam os gráficos/tabelas) */
     .st-emotion-cache-1v4f50, .st-emotion-cache-1n743z1, .st-emotion-cache-1d9g9l8, .st-emotion-cache-0 {{
-        background: var(--st-bgs2); 
+        background: var(--st-bgs2); /* Fundo sólido, coeso com o tema (Solicitado) */
         border: 1px solid var(--st-bgs3);
-        border-radius: 12px; /* Aumentado o raio para arredondar mais */
+        border-radius: 12px; /* Arredondamento (Solicitado) */
         padding: var(--card-padding); 
         margin-bottom: 1.5rem; 
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15); /* Sombra mais forte para destacar */
@@ -160,11 +161,11 @@ def get_dynamic_css() -> str:
     }}
 
     /* CORRIGIDO: Fundo dos Gráficos (Plotly) */
-    /* Define um fundo SÓLIDO para a área de plotagem, usando a cor secundária do tema */
-    /* Os labels do Plotly vão herdar o st-font-color do stApp ou do seu container pai */
+    /* Define um fundo SÓLIDO para a área de plotagem e arredonda (Solicitado) */
+    /* Isso garante a cor de fundo coesa e anula a opacidade */
     .modebar, .plotly, .js-plotly-plot, .plotly-container {{
       background-color: var(--st-bgs2) !important;
-      border-radius: 10px; /* Arredonda o fundo do gráfico */
+      border-radius: 10px; /* Arredonda o fundo do gráfico (Solicitado) */
     }}
     .js-plotly-plot {{ 
         overflow: hidden; 
@@ -302,7 +303,7 @@ def preprocess_df(df_raw: pd.DataFrame) -> pd.DataFrame:
 def load_and_preprocess_data() -> Tuple[pd.DataFrame, bool]:
     client = get_gspread_client()
     if not client:
-        # Mock data
+        # Mock data para o caso de erro ou falta de credenciais
         mock_data = {
             "DATA": [datetime.now() - timedelta(days=d) for d in range(60)] * 2,
             "TIPO": ["Receita"] * 60 + ["Despesa"] * 60,
@@ -332,7 +333,7 @@ def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
         f = f[f["CATEGORIA"].isin(cats)]
     return f.reset_index(drop=True)
 
-# -------------------- PLOTS (AJUSTADOS) --------------------
+# -------------------- PLOTS (AJUSTADOS - Fundo Plotly Transparente para herdar do Card/CSS) --------------------
 
 def _get_empty_fig(text: str = "Sem dados") -> go.Figure:
     fig = go.Figure()
@@ -356,7 +357,7 @@ def plot_saldo_acumulado(df: pd.DataFrame) -> go.Figure:
         y_pred = reg.predict(X_line)
         dates_line = [datetime.fromordinal(int(x)) for x in X_line.flatten()]
         fig.add_trace(go.Scatter(x=dates_line, y=y_pred, mode="lines", name="Tendência", line=dict(color=COLORS["trend"], dash="dash")))
-    # Fundo transparente para herdar do card
+    # Fundo transparente para herdar do card (Solicitado)
     fig.update_layout(height=DEFAULT_CHART_HEIGHT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     fig.update_xaxes(title_text="Data")
     fig.update_yaxes(title_text="Saldo (R$)")
@@ -368,7 +369,7 @@ def plot_fluxo_diario(df: pd.DataFrame) -> go.Figure:
     fluxo["DATA"] = pd.to_datetime(fluxo["DATA"])
     cores = [COLORS["receita"] if v >= 0 else COLORS["despesa"] for v in fluxo["VALOR_NUM"]]
     fig = go.Figure(go.Bar(x=fluxo["DATA"], y=fluxo["VALOR_NUM"], marker_color=cores))
-    # Fundo transparente para herdar do card
+    # Fundo transparente para herdar do card (Solicitado)
     fig.update_layout(height=DEFAULT_CHART_HEIGHT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     fig.update_xaxes(title_text="Data")
     fig.update_yaxes(title_text="Valor (R$)")
@@ -382,7 +383,7 @@ def plot_categoria_barras(df: pd.DataFrame, kind: str = "Receita", category_colo
     cats, vals = list(series.index), series.values
     marker_colors = [category_colors.get(c, COLORS["neutral"]) for c in cats]
     fig = go.Figure(go.Bar(x=vals, y=cats, orientation='h', marker=dict(color=marker_colors)))
-    # Fundo transparente para herdar do card
+    # Fundo transparente para herdar do card (Solicitado)
     fig.update_layout(height=DEFAULT_CHART_HEIGHT-10, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                       title=f'{kind} por Categoria (Barras)') 
     fig.update_xaxes(title_text="Valor (R$)")
@@ -416,6 +417,7 @@ def plot_categoria_barras_pct(df: pd.DataFrame, kind: str = "Receita", category_
         customdata=df_plot["HOVER_TEXT"]
     ))
     
+    # Fundo transparente para herdar do card (Solicitado)
     fig.update_layout(
         height=DEFAULT_CHART_HEIGHT, 
         paper_bgcolor="rgba(0,0,0,0)", 
@@ -427,8 +429,6 @@ def plot_categoria_barras_pct(df: pd.DataFrame, kind: str = "Receita", category_
     fig.update_yaxes(title_text="Porcentagem (%)", ticksuffix="%")
     return fig
 
-# Removemos a função plot_treemap_composicao
-
 def plot_bubble_transacoes_categoria_y(df: pd.DataFrame, category_colors: Dict[str,str]=None) -> go.Figure:
     if df.empty: return _get_empty_fig("Sem transações")
     df_plot = df.copy()
@@ -437,6 +437,7 @@ def plot_bubble_transacoes_categoria_y(df: pd.DataFrame, category_colors: Dict[s
     fig = px.scatter(df_plot, x="DATA", y="CATEGORIA", size="Size", color="CATEGORIA",
                      hover_name="DESCRIÇÃO", hover_data={"VALOR_FMT": True, "DATA": False},
                      color_discrete_map=category_colors, size_max=35)
+    # Opacidade leve para os marcadores (bolhas), mas fundo transparente (Solicitado)
     fig.update_traces(marker=dict(opacity=0.85, line=dict(width=0.6, color='rgba(0,0,0,0.12)')))
     fig.update_layout(height=DEFAULT_CHART_HEIGHT+40, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     fig.update_xaxes(title_text="Data")
@@ -451,6 +452,7 @@ def plot_bubble_transacoes_valor_y(df: pd.DataFrame, category_colors: Dict[str,s
     fig = px.scatter(dfp, x="DATA", y="VALOR_NUM", size="VALOR_ABS", color="CATEGORIA",
                      hover_name="DESCRIÇÃO", hover_data={"VALOR_FMT": True, "DATA": False},
                      size_max=35, color_discrete_map=category_colors)
+    # Opacidade leve para os marcadores (bolhas), mas fundo transparente (Solicitado)
     fig.update_traces(marker=dict(opacity=0.85, line=dict(width=0.6, color='rgba(0,0,0,0.12)')))
     fig.update_layout(height=DEFAULT_CHART_HEIGHT+40, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     fig.update_xaxes(title_text="Data")
@@ -483,6 +485,7 @@ def plot_candlestick(df: pd.DataFrame, freq: str = "D") -> go.Figure:
     fig.add_trace(go.Bar(x=ohlc["ts"], y=ohlc["volume"], name="Volume", marker_color=COLORS["neutral"]), row=2, col=1)
     ohlc["sma7"] = ohlc["close"].rolling(window=7, min_periods=1).mean()
     fig.add_trace(go.Scatter(x=ohlc["ts"], y=ohlc["sma7"], mode="lines", name="SMA7", line=dict(color=COLORS["trend"])), row=1, col=1)
+    # Fundo transparente para herdar do card (Solicitado)
     fig.update_layout(height=DEFAULT_CHART_HEIGHT+80, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis_rangeslider_visible=False)
     fig.update_xaxes(title_text="Período", row=2, col=1)
     fig.update_yaxes(title_text="Valor (R$)", row=1, col=1)
@@ -498,6 +501,7 @@ def plot_monthly_heatmap(df: pd.DataFrame) -> go.Figure:
     heat = pivot.pivot(index='ym', columns='day', values='VALOR_NUM').fillna(0)
     fig = go.Figure(data=go.Heatmap(z=heat.values, x=heat.columns, y=heat.index, colorscale='RdBu', reversescale=True,
                                     hovertemplate="Mês: %{y}<br>Dia: %{x}<br>Saldo Diário: %{z:.2f} R$<extra></extra>"))
+    # Fundo transparente para herdar do card (Solicitado)
     fig.update_layout(title='Heatmap Mensal de Saldo Diário', height=DEFAULT_CHART_HEIGHT+40, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     fig.update_xaxes(title_text="Dia do Mês")
     fig.update_yaxes(title_text="Mês")
@@ -508,6 +512,7 @@ def plot_boxplot_by_category(df: pd.DataFrame) -> go.Figure:
     dfp = df.copy()
     dfp['VALOR_ABS'] = dfp['VALOR_NUM'].abs()
     fig = px.box(dfp, x='CATEGORIA', y='VALOR_ABS', points='outliers', color='TIPO', color_discrete_map={"Receita": COLORS["receita"], "Despesa": COLORS["despesa"]})
+    # Fundo transparente para herdar do card (Solicitado)
     fig.update_layout(height=DEFAULT_CHART_HEIGHT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
     fig.update_xaxes(tickangle=-45)
     return fig
@@ -669,6 +674,7 @@ def main():
     # CORRIGIDO: Injeção de CSS no topo
     st.markdown(get_dynamic_css(), unsafe_allow_html=True)
     
+    # H1 usará a cor dinâmica definida no CSS (preto no light mode, branco no dark mode)
     st.title("Dashboard Financeiro Caec")
 
     try:
@@ -703,6 +709,7 @@ def main():
     if page == "Resumo Financeiro":
         
         # CARD 1: Saldo Acumulado
+        # st.container() herdará o estilo de card (fundo coeso e arredondado) do CSS
         with st.container():
             st.subheader("Evolução do Saldo Acumulado")
             st.plotly_chart(plot_saldo_acumulado(df_filtered), use_container_width=True, config={'displayModeBar': False}, key="chart_saldo_line_resumo")
@@ -777,6 +784,7 @@ def main():
                     cores_fluxo = [COLORS["receita"] if v >= 0 else COLORS["despesa"] for v in fluxo["VALOR_NUM"]]
                     fig_ma.add_trace(go.Bar(x=fluxo["DATA"], y=fluxo["VALOR_NUM"], name="Fluxo Diário", marker_color=cores_fluxo))
                     fig_ma.add_trace(go.Scatter(x=fluxo["DATA"], y=fluxo["sma14"], mode="lines", name="SMA14 (14 dias)", line=dict(color=COLORS["trend"])))
+                    # Fundo transparente para herdar do card (Solicitado)
                     fig_ma.update_layout(height=DEFAULT_CHART_HEIGHT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
                     st.plotly_chart(fig_ma, use_container_width=True, config={'displayModeBar': False}, key="chart_sma14_avancado")
             with col2:
@@ -804,4 +812,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
