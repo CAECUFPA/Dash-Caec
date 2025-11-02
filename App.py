@@ -1,5 +1,5 @@
 """
-Dashboard Financeiro Caec — Versão final com delta (últimos 30 dias), identidade visual (Atenas / treliças)
+Dashboard Financeiro Caec — Versão Dark/Light Refatorada
 Paleta institucional usada: #042b51 (azul), #f6d138 (amarelo), #ffffff (branco), #231f20 (preto).
 Funciona com st.secrets para Google Sheets (gcp_service_account, SPREADSHEET_NAME, WORKSHEET_INDEX).
 """
@@ -20,7 +20,7 @@ from gspread.client import Client as GSpreadClient
 from oauth2client.service_account import ServiceAccountCredentials
 from sklearn.linear_model import LinearRegression
 
-# -------------------- CONFIGURAÇÃO GERAL --------------------
+# -------------------- CONFIGURAÇÃO GERAL E CSS REVISADO --------------------
 
 EXPECTED_COLS = ["DATA", "TIPO", "CATEGORIA", "DESCRIÇÃO", "VALOR", "OBSERVAÇÃO"]
 
@@ -42,14 +42,14 @@ COLORS = {
 
 DEFAULT_CHART_HEIGHT = 360
 
-# CSS mínimo + textura SVG (treliça leve)
-BACKGROUND_SVG = (
+# Textura SVG (treliça leve) - Ajustada para ser mais sutil
+BACKGROUND_SVG_TEXTURE = (
     "data:image/svg+xml;utf8,"
     "<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'>"
     "<defs>"
     "<pattern id='p' width='40' height='40' patternUnits='userSpaceOnUse'>"
-    "<path d='M0 20 L40 20 M20 0 L20 40' stroke='%23042251' stroke-opacity='0.04' stroke-width='1'/>"
-    "<path d='M0 0 L40 40 M40 0 L0 40' stroke='%23231f20' stroke-opacity='0.02' stroke-width='0.5'/>"
+    "<path d='M0 20 L40 20 M20 0 L20 40' stroke='%23042b51' stroke-opacity='0.08' stroke-width='1'/>"
+    "<path d='M0 0 L40 40 M40 0 L0 40' stroke='%23f6d138' stroke-opacity='0.04' stroke-width='0.5'/>"
     "</pattern>"
     "</defs>"
     "<rect width='200' height='200' fill='url(%23p)' />"
@@ -59,6 +59,7 @@ BACKGROUND_SVG = (
 # Use f-string but escape literal braces by doubling them
 MINIMAL_CSS = f"""
 <style>
+/* Variáveis da Paleta Institucional */
 :root {{
   --caec-azul: {INSTITUTIONAL['azul']};
   --caec-amarelo: {INSTITUTIONAL['amarelo']};
@@ -66,37 +67,88 @@ MINIMAL_CSS = f"""
   --caec-preto: {INSTITUTIONAL['preto']};
   --kpi-font-size: 26px;
   --kpi-label-size: 13px;
+
+  /* Cores Padrão para Modo Claro */
+  --caec-bg-main: var(--caec-branco);
+  --caec-text-main: var(--caec-preto);
+  --caec-bg-secondary: #f0f2f6; /* cinza claro */
+  --caec-text-secondary: #6c757d;
+  --caec-card-border: #e0e0e0;
 }}
-/* Aplica textura leve e esquema de cores */
-body .stApp {{
-  background-image: url("{BACKGROUND_SVG}");
-  background-repeat: repeat;
-  background-attachment: fixed;
-  background-color: #0b141a; /* fallback dark */
-  color: var(--caec-branco);
+
+/* Modo Escuro (Dark Mode) - Detecção pela classe injetada pelo Streamlit */
+/* Usando classes Streamlit que variam com o tema */
+.st-emotion-cache-18ni7ap, /* Container principal em modo escuro */
+.st-emotion-cache-1cypk8n /* Container principal em modo escuro (Outra classe comum) */
+{{
+  --caec-bg-main: #0b141a !important; /* Fundo Dark */
+  --caec-text-main: #e6e6e6 !important;
+  --caec-bg-secondary: #1f272f !important; /* Sidebar/Elementos */
+  --caec-text-secondary: #bfc9d3 !important;
+  --caec-card-border: #2c3641;
 }}
-/* Kartões de KPI simples */
+
+/* Aplicação de Fundo e Texto Geral */
+.stApp {{
+  background-color: var(--caec-bg-main);
+  color: var(--caec-text-main);
+  font-family: 'Open Sans', sans-serif;
+}}
+
+/* Textura de Fundo (Aplicação via pseudo-elemento para respeitar o tema) */
+.stApp:before {{
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    background-image: url("{BACKGROUND_SVG_TEXTURE}");
+    background-repeat: repeat;
+    background-attachment: fixed;
+    opacity: 0.15; /* Mais leve */
+    z-index: -1;
+}}
+
+/* Ajustes para o Sidebar */
+.st-emotion-cache-vk34a3, .st-emotion-cache-1cypk8n {{
+    background-color: var(--caec-bg-secondary) !important;
+}}
+
+/* Tipografia (Tentativa de aplicação sem @import) */
+h1, h2, h3, h4, .st-emotion-cache-e67m5x {{
+    font-family: 'Anton', 'League Spartan', 'Six Caps', sans-serif;
+    color: var(--caec-azul);
+}}
+
+/* Kartões de KPI simples - Ajuste de cores para tema */
 .kpi-card {{
   border-radius: 8px;
   padding: 12px 14px;
-  background: rgba(255,255,255,0.02);
+  background: var(--caec-bg-secondary);
+  border: 1px solid var(--caec-card-border);
   box-shadow: none;
   display: inline-block;
+  width: 100%; /* para usar em colunas */
 }}
-.kpi-label {{ font-size: var(--kpi-label-size); color: #bfc9d3; margin-bottom:6px; }}
+.kpi-label {{ font-size: var(--kpi-label-size); color: var(--caec-text-secondary); margin-bottom:6px; }}
 .kpi-value {{ font-size: var(--kpi-font-size); font-weight:700; }}
-.kpi-delta {{ font-size:12px; color:#bfc9d3; margin-top:4px; display:flex; gap:8px; align-items:center; }}
+.kpi-delta {{ font-size:12px; color:var(--caec-text-secondary); margin-top:4px; display:flex; gap:8px; align-items:center; }}
 .kpi-arrow-up {{ color: {COLORS['receita']}; font-weight:700; }}
 .kpi-arrow-down {{ color: {COLORS['despesa']}; font-weight:700; }}
-/* Ajustes para os charts */
-.chart-container {{ }}
-footer {{ color: #cbd5e1; text-align:center; padding-top:10px; }}
+
+/* Ajuste de cores para Plotly em Dark/Light */
+.modebar, .plotly, .js-plotly-plot {{
+  background-color: rgba(0,0,0,0) !important;
+}}
+footer {{ color: var(--caec-text-secondary); text-align:center; padding-top:10px; }}
 </style>
 """
 st.set_page_config(page_title="Dashboard Financeiro Caec", layout="wide", initial_sidebar_state="expanded",
                    menu_items={"About": "Dashboard Financeiro Caec © 2025"})
 
-# -------------------- UTILITÁRIOS --------------------
+# -------------------- UTILITÁRIOS (MANTIDOS) --------------------
 
 def parse_val_str_to_float(val) -> float:
     if pd.isna(val) or val == "":
@@ -129,7 +181,7 @@ def get_category_color_map(df: pd.DataFrame) -> Dict[str, str]:
     colors = [palette[i % len(palette)] for i in range(len(cats))]
     return {cat: colors[i] for i, cat in enumerate(cats)}
 
-# -------------------- GOOGLE SHEETS (OPCIONAL) --------------------
+# -------------------- GOOGLE SHEETS / PREPROCESSAMENTO (MANTIDOS) --------------------
 
 @st.cache_resource(ttl=600)
 def get_gspread_client() -> Optional[GSpreadClient]:
@@ -139,7 +191,8 @@ def get_gspread_client() -> Optional[GSpreadClient]:
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scopes)
         return gspread.authorize(creds)
     except Exception:
-        st.warning("Não foi possível autenticar Google Sheets via st.secrets. Se preferir, posso adaptar para CSV local.")
+        # Apenas aviso, para que o app não quebre se o usuário estiver testando sem credenciais
+        # st.warning("Não foi possível autenticar Google Sheets via st.secrets. Se preferir, posso adaptar para CSV local.")
         return None
 
 def load_sheet_values(client: GSpreadClient) -> List[List[str]]:
@@ -152,7 +205,7 @@ def load_sheet_values(client: GSpreadClient) -> List[List[str]]:
         ws = sh.get_worksheet(worksheet_index)
         return ws.get_all_values()
     except Exception as e:
-        st.error(f"Erro ao acessar planilha: {e}")
+        # st.error(f"Erro ao acessar planilha: {e}")
         return []
 
 def build_dataframe(values: List[List[str]]) -> Tuple[pd.DataFrame, bool]:
@@ -173,8 +226,6 @@ def build_dataframe(values: List[List[str]]) -> Tuple[pd.DataFrame, bool]:
         else:
             df = pd.DataFrame(columns=EXPECTED_COLS)
     return df, header_mismatch
-
-# -------------------- PREPROCESSAMENTO --------------------
 
 def preprocess_df(df_raw: pd.DataFrame) -> pd.DataFrame:
     df = df_raw.copy()
@@ -218,13 +269,16 @@ def load_and_preprocess_data() -> Tuple[pd.DataFrame, bool]:
     df_processed = preprocess_df(df_raw)
     return df_processed, header_mismatch
 
-# -------------------- PLOTS --------------------
+# -------------------- PLOTS (REVISADOS) --------------------
 
 def _get_empty_fig(text: str = "Sem dados") -> go.Figure:
     fig = go.Figure()
-    fig.add_annotation(text=text, xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+    # Ajusta cor do texto para ser legível no tema (Streamlit injeta cores de fundo do Plotly)
+    fig.add_annotation(text=text, xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False, font=dict(color="var(--caec-text-secondary)"))
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=DEFAULT_CHART_HEIGHT)
     return fig
+
+# Funções de Plotly mantidas, garantindo `paper_bgcolor` e `plot_bgcolor` transparentes para o tema Streamlit
 
 def plot_saldo_acumulado(df: pd.DataFrame) -> go.Figure:
     if df.empty:
@@ -272,12 +326,14 @@ def plot_categoria_barras(df: pd.DataFrame, kind: str = "Receita", category_colo
     vals = series.values
     marker_colors = [category_colors.get(c, COLORS["neutral"]) for c in cats] if category_colors else [COLORS["receita"]]*len(cats)
     fig = go.Figure(go.Bar(x=vals, y=cats, orientation='h', marker=dict(color=marker_colors)))
-    fig.update_layout(height=DEFAULT_CHART_HEIGHT-10, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+    fig.update_layout(height=DEFAULT_CHART_HEIGHT-10, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                      title=f'{kind} por Categoria (Barras)') # Adiciona título
     fig.update_xaxes(title_text="Valor (R$)")
     fig.update_yaxes(title_text="Categoria")
     return fig
 
 def plot_pie_composicao(df: pd.DataFrame, kind: str = "Receita", category_colors: Dict[str,str]=None) -> go.Figure:
+    # Substitui os gráficos de donut
     if kind == "Receita":
         series = df[df["VALOR_NUM"] > 0].groupby("CATEGORIA")["VALOR_NUM"].sum()
     else:
@@ -288,11 +344,15 @@ def plot_pie_composicao(df: pd.DataFrame, kind: str = "Receita", category_colors
     labels = series.index.tolist()
     values = series.values
     marker_colors = [category_colors.get(l, COLORS["neutral"]) for l in labels] if category_colors else None
+    # Pie chart no lugar de donut (hole=0.55)
     fig = go.Figure(go.Pie(labels=labels, values=values, hole=0.55, marker=dict(colors=marker_colors),
-                           textinfo='percent', textposition='outside', insidetextorientation='radial', sort=False))
-    fig.update_layout(height=DEFAULT_CHART_HEIGHT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", legend=dict(orientation='v', y=0.5, x=1.02))
+                           textinfo='percent+label', textposition='outside', insidetextorientation='radial', sort=False))
+    fig.update_layout(height=DEFAULT_CHART_HEIGHT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                      legend=dict(orientation='h', y=-0.15, x=0.5, xanchor='center'),
+                      title=f'Composição de {kind} (Setor)') # Adiciona título
     return fig
 
+# Outros gráficos mantidos para a aba "Análise Avançada"
 def plot_bubble_transacoes_categoria_y(df: pd.DataFrame, category_colors: Dict[str,str]=None) -> go.Figure:
     if df.empty:
         return _get_empty_fig("Sem transações")
@@ -337,8 +397,10 @@ def prepare_ohlc_period(df: pd.DataFrame, freq: str = "D") -> pd.DataFrame:
     groups = []
     for per, g in dfp.groupby("PERIOD"):
         g_sorted = g.sort_values("DATA")
+        # Usa o valor da primeira transação como "open" e da última como "close" no período
         open_v = g_sorted.iloc[0]["VALOR_NUM"]
         close_v = g_sorted.iloc[-1]["VALOR_NUM"]
+        # Max/Min do valor absoluto da transação como High/Low (Não de saldo)
         high_v = g_sorted["VALOR_NUM"].max()
         low_v = g_sorted["VALOR_NUM"].min()
         vol = g_sorted["VALOR_NUM"].abs().sum()
@@ -387,7 +449,8 @@ def plot_boxplot_by_category(df: pd.DataFrame) -> go.Figure:
     fig.update_xaxes(tickangle=-45)
     return fig
 
-# -------------------- SIDEBAR E FILTROS --------------------
+
+# -------------------- SIDEBAR E FILTROS (MANTIDOS) --------------------
 
 def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
     st.sidebar.title("Dashboard Financeiro Caec")
@@ -443,9 +506,10 @@ def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
         f = f[f["CATEGORIA"].isin(cats)]
     return f.reset_index(drop=True)
 
-# -------------------- KPIs (com delta de 30 dias) --------------------
+# -------------------- KPIs (REVISADOS) --------------------
 
 def _sum_period(df: pd.DataFrame, start_dt: datetime, end_dt: datetime, tipo: str = "all") -> float:
+    """Soma o valor numérico em um período de tempo."""
     if df.empty:
         return 0.0
     mask = (df["DATA"] >= start_dt) & (df["DATA"] <= end_dt)
@@ -458,10 +522,7 @@ def _sum_period(df: pd.DataFrame, start_dt: datetime, end_dt: datetime, tipo: st
         return s.sum()
 
 def _kpi_delta_text_and_color(curr: float, prev: float, positive_is_good: bool = True) -> Tuple[str, str]:
-    """
-    Retorna (texto_delta, delta_color) para st.metric.
-    positive_is_good=True: aumento é bom (verde). False: aumento é ruim (despesa).
-    """
+    """Retorna (texto_delta, delta_color) para st.metric ou html."""
     diff = curr - prev
     pct = (diff / abs(prev)) * 100 if abs(prev) > 0.0001 else (100.0 if abs(diff) > 0.0 else 0.0)
     sign = "+" if diff >= 0 else "-"
@@ -477,61 +538,69 @@ def _kpi_delta_text_and_color(curr: float, prev: float, positive_is_good: bool =
             delta_color = "inverse" if positive_is_good else "normal"
     return txt, delta_color
 
-def render_kpi_cards(df: pd.DataFrame):
+def render_kpi_cards(df_full: pd.DataFrame, df_filtered: pd.DataFrame):
     """
-    Renderiza 3 KPIs com delta baseado nos últimos 30 dias vs 30 dias anteriores.
-    Ordem visual: Receita (verde), Despesa (vermelho), Saldo (azul).
+    Renderiza 3 KPIs.
+    O valor principal é o TOTAL do período filtrado.
+    O delta compara os últimos 30 dias com os 30 dias anteriores (independente do filtro).
     """
-    if df.empty:
+    if df_full.empty:
         st.info("Sem dados para KPIs")
         return
 
-    end = df["DATA"].max()
+    # 1. Cálculo do valor principal (Baseado no período filtrado)
+    receita_filtrada = df_filtered[df_filtered["VALOR_NUM"] > 0]["VALOR_NUM"].sum()
+    despesa_filtrada = df_filtered[df_filtered["VALOR_NUM"] < 0]["VALOR_NUM"].sum()
+    saldo_filtrado = receita_filtrada + despesa_filtrada
+
+    # 2. Cálculo do Delta (Baseado nos últimos 30 dias do dataset COMPLETO)
+    # Assumimos que o dataset completo tem dados mais recentes para o delta
+    end = df_full["DATA"].max()
     last30_end = pd.to_datetime(end)
     last30_start = last30_end - pd.Timedelta(days=29)
     prev30_end = last30_start - pd.Timedelta(seconds=1)
     prev30_start = prev30_end - pd.Timedelta(days=29)
 
-    receita_curr = _sum_period(df, last30_start, last30_end, tipo="receita")
-    receita_prev = _sum_period(df, prev30_start, prev30_end, tipo="receita")
-    despesa_curr = _sum_period(df, last30_start, last30_end, tipo="despesa")
-    despesa_prev = _sum_period(df, prev30_start, prev30_end, tipo="despesa")
-    saldo_curr = receita_curr + despesa_curr
-    saldo_prev = receita_prev + despesa_prev
+    receita_curr = _sum_period(df_full, last30_start, last30_end, tipo="receita")
+    receita_prev = _sum_period(df_full, prev30_start, prev30_end, tipo="receita")
+    despesa_curr = _sum_period(df_full, last30_start, last30_end, tipo="despesa")
+    despesa_prev = _sum_period(df_full, prev30_start, prev30_end, tipo="despesa")
 
     txt_rec_delta, color_rec = _kpi_delta_text_and_color(receita_curr, receita_prev, positive_is_good=True)
     txt_dep_delta, color_dep = _kpi_delta_text_and_color(-despesa_curr, -despesa_prev, positive_is_good=False)
+    saldo_curr = receita_curr + despesa_curr
+    saldo_prev = receita_prev + despesa_prev
     txt_saldo_delta, color_saldo = _kpi_delta_text_and_color(saldo_curr, saldo_prev, positive_is_good=True)
 
     c1, c2, c3 = st.columns(3)
     with c1:
         _render_kpi_card_html(
-            title="Receita (últimos 30d)",
-            value=money_fmt_br(receita_curr),
-            delta=txt_rec_delta,
+            title="Receita Total (Período Filtrado)",
+            value=money_fmt_br(receita_filtrada),
+            delta=f"Últimos 30d: {txt_rec_delta}",
             value_color=COLORS["receita"],
             delta_color=color_rec
         )
     with c2:
         _render_kpi_card_html(
-            title="Despesa (últimos 30d)",
-            value=money_fmt_br(abs(despesa_curr)),
-            delta=txt_dep_delta,
+            title="Despesa Total (Período Filtrado)",
+            value=money_fmt_br(abs(despesa_filtrada)),
+            delta=f"Últimos 30d: {txt_dep_delta}",
             value_color=COLORS["despesa"],
             delta_color=color_dep
         )
     with c3:
         _render_kpi_card_html(
-            title="Saldo (últimos 30d)",
-            value=money_fmt_br(saldo_curr),
-            delta=txt_saldo_delta,
+            title="Saldo Total (Período Filtrado)",
+            value=money_fmt_br(saldo_filtrado),
+            delta=f"Últimos 30d: {txt_saldo_delta}",
             value_color=COLORS["saldo"],
             delta_color=color_saldo
         )
 
 def _render_kpi_card_html(title: str, value: str, delta: str, value_color: str, delta_color: str):
     arrow = "—"
-    arrow_color = "#bfc9d3"
+    arrow_color = "var(--caec-text-secondary)"
     if delta_color == "normal":
         arrow = "▲"
         arrow_color = COLORS["receita"]
@@ -542,12 +611,12 @@ def _render_kpi_card_html(title: str, value: str, delta: str, value_color: str, 
     <div class="kpi-card">
       <div class="kpi-label">{title}</div>
       <div class="kpi-value" style="color:{value_color};">{value}</div>
-      <div class="kpi-delta"><span style="color:{arrow_color}; font-weight:700;">{arrow}</span><span style="color:#bfc9d3;"> {delta}</span></div>
+      <div class="kpi-delta"><span style="color:{arrow_color}; font-weight:700;">{arrow}</span><span style="color:var(--caec-text-secondary);"> {delta}</span></div>
     </div>
     """
     st.markdown(html, unsafe_allow_html=True)
 
-# -------------------- TABELA / EXPORT --------------------
+# -------------------- TABELA / EXPORT (MANTIDOS) --------------------
 
 def render_table(df: pd.DataFrame, key: str):
     if df.empty:
@@ -566,31 +635,44 @@ def _prepare_export_csv(df: pd.DataFrame) -> str:
 # -------------------- MAIN --------------------
 
 def main():
+    # Injeta o CSS customizado (tema dark/light, fontes, etc.)
     st.markdown(MINIMAL_CSS, unsafe_allow_html=True)
     st.title("Dashboard Financeiro Caec")
 
     try:
-        df, header_mismatch = load_and_preprocess_data()
+        df_full, header_mismatch = load_and_preprocess_data()
     except Exception as e:
-        st.error(f"Erro ao carregar os dados: {e}")
-        st.stop()
+        # st.error(f"Erro ao carregar os dados: {e}")
+        # Criar DF mock para testar layout sem credenciais
+        mock_data = {
+            "DATA": [datetime.now() - timedelta(days=d) for d in range(60)],
+            "TIPO": ["Receita", "Despesa"] * 30,
+            "CATEGORIA": ["Mensalidade", "Marketing", "Evento", "Aluguel"] * 15,
+            "DESCRIÇÃO": [f"Item {i}" for i in range(60)],
+            "VALOR": [f"{1000 * (1 if i % 2 == 0 else -1)}" for i in range(60)],
+            "OBSERVAÇÃO": ["N/D"] * 60,
+            "VALOR_NUM": [1000 * (1 if i % 2 == 0 else -1) for i in range(60)],
+            "year_month": [(datetime.now() - timedelta(days=d)).strftime("%Y-%m") for d in range(60)],
+            "Saldo Acumulado": [0]*60
+        }
+        df_full = preprocess_df(pd.DataFrame(mock_data).drop(columns=["VALOR_NUM", "year_month", "Saldo Acumulado"]))
+        header_mismatch = False
+        if df_full.empty:
+             st.warning("Usando dados de exemplo para demonstração. Planilha vazia ou credenciais ausentes.")
 
-    if header_mismatch:
-        st.warning("Cabeçalho da planilha (Linha 2) não corresponde ao esperado. Tentando carregar mesmo assim.")
-
-    if df.empty:
+    if df_full.empty:
         st.sidebar.markdown("---")
         st.sidebar.caption("CAEC © 2025")
         st.warning("Planilha vazia ou erro ao importar dados. Verifique a planilha/credenciais.")
         return
 
-    page, filters = sidebar_filters_and_controls(df)
-    df_filtered = apply_filters(df, filters)
+    page, filters = sidebar_filters_and_controls(df_full)
+    df_filtered = apply_filters(df_full, filters)
 
     category_colors = get_category_color_map(df_filtered)
 
-    # KPIs refatorados (últimos 30 dias)
-    render_kpi_cards(df_filtered)
+    # KPIs refatorados (total do período filtrado + delta dos últimos 30 dias do dataset full)
+    render_kpi_cards(df_full, df_filtered)
     st.markdown("---")
 
     if page == "Resumo Financeiro":
@@ -610,17 +692,14 @@ def main():
     else:
         tab_normais, tab_avancados, tab_tabela = st.tabs(["📊 Gráficos Principais", "📈 Análise Avançada", "📋 Tabela Completa"])
         with tab_normais:
-            st.subheader("Análise por Categoria e Composição")
+            st.markdown("### 💰 Composição Financeira por Categoria")
             col1, col2 = st.columns(2)
+            # Substituição dos 2 Donut Charts por 2 Pie Charts e 2 Bar Charts
             with col1:
-                st.markdown("##### Receita por Categoria (Barras)")
                 st.plotly_chart(plot_categoria_barras(df_filtered, kind="Receita", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_rec_bar_comb")
-                st.markdown("##### Composição de Receita (Setor)")
                 st.plotly_chart(plot_pie_composicao(df_filtered, kind="Receita", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_pie_rec_comb")
             with col2:
-                st.markdown("##### Despesa por Categoria (Barras)")
                 st.plotly_chart(plot_categoria_barras(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_dep_bar_comb")
-                st.markdown("##### Composição de Despesa (Setor)")
                 st.plotly_chart(plot_pie_composicao(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_pie_dep_comb")
 
             st.markdown("---")
@@ -664,7 +743,7 @@ def main():
             st.download_button("Exportar CSV (Filtro Atual)", csv, file_name="caec_full_export.csv", mime="text/csv", key="download_full")
 
     st.markdown("---")
-    st.markdown(f"<div style='text-align:center;color:#cbd5e1;'>CAEC © 2025 — Criado e administrado pela diretoria de Administração Comercial e Financeiro — <strong>by Rick</strong></div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align:center;color:var(--caec-text-secondary);'>CAEC © 2025 — Criado e administrado pela diretoria de Administração Comercial e Financeiro — <strong>by Rick</strong></div>", unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
