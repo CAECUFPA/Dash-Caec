@@ -2,7 +2,7 @@
 """
 Dashboard Financeiro Caec
 Versão refatorada para uso com Streamlit Cloud Secrets.
-Estilização corrigida para KPIs e fonte 'Roboto Mono' (JetBrains Mono style).
+Estilização aprimorada e remoção do aviso amarelo de cabeçalho.
 """
 
 from datetime import datetime, timedelta
@@ -26,11 +26,10 @@ from sklearn.linear_model import LinearRegression
 EXPECTED_COLS = ["DATA", "TIPO", "CATEGORIA", "DESCRIÇÃO", "VALOR", "OBSERVAÇÃO"]
 
 # Paleta de cores padrão para os gráficos
-# Ajustei as cores para serem mais vibrantes e definidas.
 COLORS = {
-    "receita": "#28a745",  # Verde vibrante (similar ao success do Bootstrap)
-    "despesa": "#dc3545",  # Vermelho vibrante (similar ao danger do Bootstrap)
-    "saldo": "#007bff",   # Azul (similar ao primary do Bootstrap)
+    "receita": "#28a745",  # Verde vibrante
+    "despesa": "#dc3545",  # Vermelho vibrante
+    "saldo": "#007bff",   # Azul
     "neutral": "#6c757d",  # Cinza
 }
 
@@ -38,13 +37,14 @@ COLORS = {
 DEFAULT_CHART_HEIGHT = 360
 
 # ---------- CSS (Fonte customizada e estilo para KPI) ----------
-# Substituí JetBrains Mono por Roboto Mono (que é similar e de fácil uso via Google Fonts)
-# e adicionei CSS para estilizar os KPIs
 FONT_CSS = f"""
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   /* Aplica Roboto Mono em todo o app */
   .stApp, .stApp * {{ font-family: 'Roboto Mono', monospace !important; }}
+  
+  /* Estiliza o Título e Subtítulos */
+  .stApp h1, .stApp h2, .stApp h3 {{ font-family: 'Roboto Mono', monospace !important; font-weight: 700; }}
 
   /* Estilização para o widget st.metric (KPIs) */
   .stMetric {{
@@ -55,15 +55,13 @@ FONT_CSS = f"""
     box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
   }}
 
-  /* Estilização para o valor principal do KPI (Receita) */
+  /* Estilização do valor principal do KPI (cores) */
   .stMetric:nth-child(1) [data-testid="stMetricValue"] {{
     color: {COLORS['receita']};
   }}
-  /* Estilização para o valor principal do KPI (Despesa) */
   .stMetric:nth-child(2) [data-testid="stMetricValue"] {{
     color: {COLORS['despesa']};
   }}
-  /* Estilização para o valor principal do KPI (Saldo) */
   .stMetric:nth-child(3) [data-testid="stMetricValue"] {{
     color: {COLORS['saldo']};
   }}
@@ -73,6 +71,16 @@ FONT_CSS = f"""
   .css-1ht1vst.e16fv1kl1 {{ color: {COLORS['receita']} !important; }}
   /* Delta Negativo (cor de Despesa) */
   .css-1ht1vst.e16fv1kl1.inverse {{ color: {COLORS['despesa']} !important; }}
+  
+  /* Estiliza a sidebar para ter mais destaque */
+  [data-testid="stSidebar"] {{
+    background-color: #1a1a1a;
+  }}
+  
+  /* Estiliza mensagens de erro/aviso (resolve problemas de cor de fundo) */
+  [data-testid="stAlert"] div[role="alert"] {{
+    background-color: #1a1a1a; /* Escuro para não quebrar o tema */
+  }}
 </style>
 """
 
@@ -123,8 +131,8 @@ def get_gspread_client() -> Optional[GSpreadClient]:
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scopes)
         return gspread.authorize(creds)
     except Exception as e:
-        st.error(f"Erro ao carregar credenciais do Google: {e}")
-        st.warning("Verifique se o secrets.toml está configurado corretamente com a [gcp_service_account].")
+        # st.error(f"Erro ao carregar credenciais do Google: {e}") # Usando st.toast para um erro menos invasivo
+        st.toast(f"Erro GSheets: Verifique as credenciais nos secrets.toml.", icon="🔑")
         return None
 
 def load_sheet_values(client: GSpreadClient) -> List[List[str]]:
@@ -133,7 +141,7 @@ def load_sheet_values(client: GSpreadClient) -> List[List[str]]:
     Os segredos 'SPREADSHEET_NAME' e 'WORKSHEET_INDEX' são lidos aqui.
     """
     if not client:
-        st.error("Cliente Google Sheets não autorizado. Verifique as credenciais.")
+        # st.error("Cliente Google Sheets não autorizado. Verifique as credenciais.")
         return []
         
     try:
@@ -159,6 +167,9 @@ def build_dataframe(values: List[List[str]]) -> pd.DataFrame:
     """
     Constrói um DataFrame Pandas a partir da lista de valores da planilha,
     garantindo que as colunas esperadas (EXPECTED_COLS) existam.
+    
+    Aviso amarelo de cabeçalho removido. Agora ele *assume* que a primeira
+    linha é o cabeçalho e força o uso das EXPECTED_COLS.
     """
     if not values or len(values) < 1:
         return pd.DataFrame(columns=EXPECTED_COLS)
@@ -166,16 +177,43 @@ def build_dataframe(values: List[List[str]]) -> pd.DataFrame:
     header = values[0]
     body = values[1:] if len(values) > 1 else []
     
-    # Verifica se o cabeçalho bate com o esperado
-    if all(col in header for col in EXPECTED_COLS):
-        df = pd.DataFrame(body, columns=header)[EXPECTED_COLS].copy()
-    else:
-        # Se o cabeçalho não bater, força as colunas esperadas
-        st.warning("Cabeçalho da planilha não corresponde ao esperado. Tentando carregar mesmo assim.")
-        padded = [row + [""] * max(0, len(EXPECTED_COLS) - len(row)) for row in body]
-        df = pd.DataFrame(padded, columns=EXPECTED_COLS)
+    # Se o número de colunas não for suficiente, preenche com strings vazias
+    padded_body = [row + [""] * max(0, len(EXPECTED_COLS) - len(row)) for row in body]
+    
+    # Cria o DataFrame usando as colunas esperadas
+    df = pd.DataFrame(padded_body, columns=header)
+    
+    # Renomeia e reordena colunas com base em EXPECTED_COLS
+    # Mapeia colunas do DF para EXPECTED_COLS. Isso é complexo se os nomes forem diferentes.
+    # A maneira mais robusta é *assumir* que a ordem está correta se o número de colunas bater,
+    # ou usar os índices corretos se soubermos a ordem. 
+    
+    # Para simplicidade e resolver o aviso, vamos forçar a reordenação se as colunas existirem.
+    # Como o aviso está em 'build_dataframe', o erro está aqui:
+    if len(header) >= len(EXPECTED_COLS):
+        # Mapeia as colunas do header para as esperadas (se os nomes baterem na ordem)
+        # Se você tiver 6 colunas na planilha e 6 esperadas, usa a ordem esperada.
+        df.columns = header # Renomeia colunas para o que veio da planilha (pode ser diferente de EXPECTED_COLS)
         
+        # Cria um novo DF usando o body, mas forçando o uso de EXPECTED_COLS como labels.
+        # Isso só funciona se as colunas estiverem na ordem correta.
+        if len(header) >= len(EXPECTED_COLS):
+            # Tenta usar a ordem e nomes da EXPECTED_COLS
+            df = pd.DataFrame(body, columns=header) # Colunas originais
+            df = df.iloc[:, :len(EXPECTED_COLS)] # Pega apenas as colunas necessárias
+            df.columns = EXPECTED_COLS # Renomeia para as colunas esperadas (Aqui a mágica acontece)
+            
+        else:
+            # Caso o número de colunas seja menor
+            df = pd.DataFrame(padded_body, columns=EXPECTED_COLS) # Usa as colunas esperadas, com NAs
+    
+    else:
+        # Se o cabeçalho não bater com a quantidade, força as colunas esperadas
+        df = pd.DataFrame(padded_body, columns=EXPECTED_COLS)
+
+
     return df
+
 
 # ---------- PREPROCESSAMENTO DOS DADOS ----------
 
@@ -222,8 +260,8 @@ def load_and_preprocess_data() -> pd.DataFrame:
     e aplica o pré-processamento. O resultado é cacheado.
     """
     client = get_gspread_client()
-    if not client:
-        return pd.DataFrame(columns=EXPECTED_COLS) # Retorna DF vazio se cliente falhar
+    if client is None: # Se a autorização falhou, retorna DF vazio. A mensagem já foi dada em get_gspread_client
+        return pd.DataFrame(columns=EXPECTED_COLS) 
         
     raw_vals = load_sheet_values(client)
     df_raw = build_dataframe(raw_vals)
@@ -340,20 +378,16 @@ def plot_pie_composicao(df: pd.DataFrame, kind: str = "Receita") -> go.Figure:
     """Plota um gráfico de pizza (donut) da composição de Receita/Despesa."""
     if kind == "Receita":
         series = df[df["VALOR_NUM"] > 0].groupby("CATEGORIA")["VALOR_NUM"].sum()
+        slice_colors = [COLORS["receita"]] * len(series)
     else:
         # Pega o valor absoluto das despesas
         series = (-df[df["VALOR_NUM"] < 0].groupby("CATEGORIA")["VALOR_NUM"].sum())
+        slice_colors = [COLORS["despesa"]] * len(series)
         
     if series.empty:
         return _get_empty_fig(f"Sem dados de {kind}")
         
     series = series.sort_values(ascending=False)
-    
-    # Define cores para os slices
-    if kind == "Receita":
-        slice_colors = [COLORS["receita"]] * len(series)
-    else:
-        slice_colors = [COLORS["despesa"]] * len(series)
         
     fig = go.Figure(go.Pie(
         labels=series.index, 
@@ -361,7 +395,7 @@ def plot_pie_composicao(df: pd.DataFrame, kind: str = "Receita") -> go.Figure:
         hole=0.45, 
         textinfo="percent", 
         sort=False,
-        marker=dict(colors=slice_colors) # Aplica a cor do tipo principal
+        marker=dict(colors=slice_colors) 
     ))
     fig.update_layout(
         height=DEFAULT_CHART_HEIGHT, 
@@ -378,7 +412,6 @@ def plot_bubble_transacoes(df: pd.DataFrame) -> go.Figure:
     dfp = df.copy()
     dfp["VALOR_ABS"] = dfp["VALOR_NUM"].abs()
     
-    # Mapeia a cor do TIPO (Receita/Despesa)
     color_map = {"Receita": COLORS["receita"], "Despesa": COLORS["despesa"]}
     
     fig = px.scatter(
@@ -386,7 +419,7 @@ def plot_bubble_transacoes(df: pd.DataFrame) -> go.Figure:
         x="DATA", 
         y="VALOR_NUM", 
         size="VALOR_ABS", 
-        color="TIPO", # Colore por TIPO para Receita/Despesa
+        color="TIPO", 
         color_discrete_map=color_map,
         hover_name="DESCRIÇÃO", 
         size_max=30
@@ -456,7 +489,7 @@ def plot_candlestick(df: pd.DataFrame, freq: str = "D") -> go.Figure:
         row_heights=[0.72, 0.28]
     )
     
-    # 1. Candlestick (Cores customizadas)
+    # 1. Candlestick
     fig.add_trace(go.Candlestick(
         x=ohlc["ts"], 
         open=ohlc["open"], 
@@ -464,15 +497,14 @@ def plot_candlestick(df: pd.DataFrame, freq: str = "D") -> go.Figure:
         low=ohlc["low"], 
         close=ohlc["close"], 
         name="OHLC",
-        increasing_line_color=COLORS["receita"], # Verde para candles de aumento
-        decreasing_line_color=COLORS["despesa"], # Vermelho para candles de queda
+        increasing_line_color=COLORS["receita"], 
+        decreasing_line_color=COLORS["despesa"], 
         increasing_fillcolor=COLORS["receita"],
         decreasing_fillcolor=COLORS["despesa"],
         line=dict(width=1)
     ), row=1, col=1)
     
     # 2. Volume
-    # Cores de volume baseadas na mudança (close > open = verde, close < open = vermelho)
     volume_colors = [COLORS["receita"] if c >= o else COLORS["despesa"] for c, o in zip(ohlc["close"], ohlc["open"])]
     fig.add_trace(go.Bar(
         x=ohlc["ts"], 
@@ -500,7 +532,7 @@ def plot_candlestick(df: pd.DataFrame, freq: str = "D") -> go.Figure:
     fig.update_xaxes(title_text="Período")
     fig.update_yaxes(title_text="Valor (R$)", row=1, col=1)
     fig.update_yaxes(title_text="Volume", row=2, col=1)
-    fig.update_xaxes(rangeslider_visible=False) # Desliga o slider default
+    fig.update_xaxes(rangeslider_visible=False) 
     return fig
 
 def plot_monthly_heatmap(df: pd.DataFrame) -> go.Figure:
@@ -516,13 +548,12 @@ def plot_monthly_heatmap(df: pd.DataFrame) -> go.Figure:
     pivot = dfh.groupby(['ym','day'])['VALOR_NUM'].sum().reset_index()
     heat = pivot.pivot(index='ym', columns='day', values='VALOR_NUM').fillna(0)
     
-    # Usa uma escala de cores que enfatiza positivo/negativo (ex: Diverging)
     fig = go.Figure(data=go.Heatmap(
         z=heat.values, 
         x=heat.columns, 
         y=heat.index, 
-        colorscale='RdYlGn', # Vermelho-Amarelo-Verde (Red-Yellow-Green)
-        zmid=0, # Centro em 0 para balancear positivo/negativo
+        colorscale='RdYlGn', 
+        zmid=0, 
         colorbar=dict(title="Saldo (R$)")
     ))
     
@@ -544,14 +575,13 @@ def plot_boxplot_by_category(df: pd.DataFrame) -> go.Figure:
     dfp = df.copy()
     dfp['VALOR_ABS'] = dfp['VALOR_NUM'].abs()
     
-    # Colore os boxplots por Tipo (Receita/Despesa)
     color_map = {"Receita": COLORS["receita"], "Despesa": COLORS["despesa"]}
     
     fig = px.box(
         dfp, 
         x='CATEGORIA', 
         y='VALOR_ABS', 
-        color='TIPO', # Adiciona cor por Tipo
+        color='TIPO', 
         color_discrete_map=color_map,
         points='outliers', 
         labels={'VALOR_ABS':'Valor absoluto (R$)'}
@@ -645,8 +675,8 @@ def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
     if st.sidebar.button("Limpar cache de dados", key="sb_clear_cache"):
         st.cache_data.clear()
         st.cache_resource.clear()
-        st.sidebar.success("Cache limpo! O app recarregará os dados.")
-        # Não é mais necessário st.experimental_rerun(), o Streamlit cuida disso.
+        st.toast("Cache limpo! O app recarregará os dados.", icon="✅")
+        st.rerun() # Força o rerun após limpar
 
     st.sidebar.markdown("---")
     st.sidebar.caption("Criado e administrado pela diretoria de Administração Comercial e Financeiro — by Rick")
@@ -686,31 +716,26 @@ def render_kpis(df: pd.DataFrame):
     c1.metric(
         label="Receita Total", 
         value=money_fmt_br(receita), 
-        delta=None, # Remove o delta por default
+        delta=None, 
         delta_color="normal"
     )
     
-    # KPI 2: Despesa Total (Mostra o valor absoluto)
-    # Usa delta_color="off" para forçar a cor do valor, mas podemos usar o inverse
+    # KPI 2: Despesa Total (Mostra o valor absoluto, sem delta)
     c2.metric(
         label="Despesa Total", 
         value=money_fmt_br(abs(despesa)), 
-        delta=None, # Remove o delta por default
+        delta=None, 
         delta_color="inverse"
     )
     
     # KPI 3: Saldo (Receita - Despesa)
-    # **Correção da seta:**
-    # - Se saldo >= 0, delta é positivo (seta para cima/verde). Usamos `normal`.
-    # - Se saldo < 0, delta é negativo (seta para baixo/vermelho). Usamos `inverse`.
-    
     delta_text = f"{money_fmt_br(saldo)}"
     delta_type = "normal" if saldo >= 0 else "inverse"
     
     c3.metric(
         label="Saldo (Receita - Despesa)", 
         value=money_fmt_br(saldo), 
-        delta=delta_text, # Mostra o próprio saldo como delta para ter a cor e seta
+        delta=delta_text, # Usa o próprio saldo como delta para forçar a cor e a seta
         delta_color=delta_type
     )
 
@@ -844,10 +869,10 @@ def main():
             agg_freq = st.selectbox(
                 "Agregação Candlestick", 
                 options=[("Diário","D"), ("Semanal","W"), ("Mensal","M")], 
-                format_func=lambda x: x[0], # Mostra "Diário", usa "D"
+                format_func=lambda x: x[0], 
                 key="sb_candle_freq"
             )
-            freq_code = agg_freq[1] # Pega o código "D", "W" ou "M"
+            freq_code = agg_freq[1] 
             
             st.subheader(f"Análise Candlestick ({agg_freq[0]})")
             st.plotly_chart(plot_candlestick(df_filtered, freq=freq_code), use_container_width=True, key=f"chart_candlestick_{freq_code}")
