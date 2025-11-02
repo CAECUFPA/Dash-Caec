@@ -915,4 +915,8 @@ def main():
     )
 
 # Ponto de entrada padrão para execução do script
+# ... (Linhas de código anteriores) ...
+
+# Ponto de entrada padrão para execução do script
 if __name__ == "__main__":
+    main() # Linha 919: Esta linha PRECISA estar indentada!
