@@ -1,5 +1,5 @@
 """
-Dashboard Financeiro Caec — Versão FINAL Dark/Light com Tipografia e Paleta Institucional
+Dashboard Financeiro Caec — Versão FINAL 2.0: Blueprint Visual, Treemaps e KPIs Alinhados
 Paleta institucional usada: #042b51 (azul), #f6d138 (amarelo), #ffffff (branco), #231f20 (preto).
 Funciona com st.secrets para Google Sheets.
 """
@@ -42,19 +42,16 @@ COLORS = {
 
 DEFAULT_CHART_HEIGHT = 360
 
-# Textura SVG (treliça leve) - Sem links externos
-BACKGROUND_SVG_TEXTURE = (
-    "data:image/svg+xml;utf8,"
-    "<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'>"
-    "<defs>"
-    "<pattern id='p' width='40' height='40' patternUnits='userSpaceOnUse'>"
-    "<path d='M0 20 L40 20 M20 0 L20 40' stroke='%23042b51' stroke-opacity='0.08' stroke-width='1'/>"
-    "<path d='M0 0 L40 40 M40 0 L0 40' stroke='%23f6d138' stroke-opacity='0.04' stroke-width='0.5'/>"
-    "</pattern>"
-    "</defs>"
-    "<rect width='200' height='200' fill='url(%23p)' />"
-    "</svg>"
-)
+# NOVO: Blueprint Background em CSS Puro (sem SVG de treliça)
+# Um padrão de linhas sutis para um efeito "blueprint"
+BLUEPRINT_BACKGROUND_CSS = """
+  background-image:
+    linear-gradient(0deg, var(--bg-line-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bg-line-color) 1px, transparent 1px);
+  background-size: 20px 20px;
+  background-position: -1px -1px;
+  opacity: 0.1; /* Sutil */
+"""
 
 # CSS que respeita o modo Dark/Light do sistema/usuário
 MINIMAL_CSS = f"""
@@ -78,6 +75,7 @@ MINIMAL_CSS = f"""
   --text-main: {INSTITUTIONAL['preto']};
   --text-secondary: #6c757d;
   --card-border: #e0e0e0;
+  --bg-line-color: #e0e0e0; /* Cor da linha do blueprint */
 }}
 
 /* Modo ESCURO (Dark Mode) - Sobrescreve as variáveis se o sistema preferir o tema escuro */
@@ -88,6 +86,7 @@ MINIMAL_CSS = f"""
         --text-main: #e6e6e6;
         --text-secondary: #bfc9d3;
         --card-border: #2c3641;
+        --bg-line-color: #2c3641; /* Cor da linha do blueprint no dark mode */
     }}
 }}
 
@@ -98,8 +97,8 @@ MINIMAL_CSS = f"""
 .stApp {{
   background-color: var(--bg-main);
   color: var(--text-main);
-  /* Tipografia (Fallback: Open Sans -> Sans-serif) */
-  font-family: 'Open Sans', sans-serif;
+  font-family: 'Open Sans', sans-serif; /* Tipografia padrão para corpo */
+  {BLUEPRINT_BACKGROUND_CSS} /* Aplica o blueprint de fundo */
 }}
 
 /* Tipografia para Títulos - Deve tentar usar as fontes institucionais */
@@ -108,29 +107,14 @@ h1, h2, h3, h4, .st-emotion-cache-e67m5x {{ /* e67m5x é o título do app no sid
     color: var(--caec-azul);
 }}
 
-/* Textura de Fundo (Aplicação via pseudo-elemento) */
-.stApp:before {{
-    content: "";
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    background-image: url("{BACKGROUND_SVG_TEXTURE}");
-    background-repeat: repeat;
-    background-attachment: fixed;
-    opacity: 0.15;
-    z-index: -1;
-}}
-
-/* Sidebar - Usa a cor secundária */
+/* Sidebar - Usa a cor secundária e sem "vidros" */
 .st-emotion-cache-vk34a3, .st-emotion-cache-1cypk8n {{
     background-color: var(--bg-secondary) !important;
+    border-right: 1px solid var(--card-border); /* Borda sutil */
 }}
 
 /* ------------------------------------------------------------------- */
-/* 3. ESTILOS DE KPI (PARA REPRODUZIR O LAYOUT SEM st.metric) */
+/* 3. ESTILOS DE KPI (PARA REPRODUZIR O LAYOUT SEM st.metric) - ALTURA IGUAL */
 /* ------------------------------------------------------------------- */
 
 .kpi-card {{
@@ -140,22 +124,26 @@ h1, h2, h3, h4, .st-emotion-cache-e67m5x {{ /* e67m5x é o título do app no sid
   border: 1px solid var(--card-border);
   box-shadow: none;
   width: 100%;
+  height: 120px; /* Altura fixa para todos os KPIs */
+  display: flex; /* Para alinhar o conteúdo */
+  flex-direction: column;
+  justify-content: space-between; /* Espaço entre label, valor e delta */
 }}
 .kpi-label {{ 
   font-size: 13px; 
   color: var(--text-secondary); 
-  margin-bottom:6px; 
+  margin-bottom:auto; /* Empurra o valor e delta para baixo */
 }}
 .kpi-value {{ 
   font-size: 26px; 
   font-weight:700; 
-  /* Tenta aplicar a fonte de destaque (Anton/League Spartan) */
   font-family: 'Anton', 'League Spartan', sans-serif;
+  margin-top: 4px; /* Espaçamento do label */
 }}
 .kpi-delta {{ 
   font-size:12px; 
   color:var(--text-secondary); 
-  margin-top:4px; 
+  margin-top: auto; /* Empurra o delta para o final do card */
   display:flex; 
   gap:8px; 
   align-items:center; 
@@ -302,9 +290,42 @@ def load_and_preprocess_data() -> Tuple[pd.DataFrame, bool]:
 
 def _get_empty_fig(text: str = "Sem dados") -> go.Figure:
     fig = go.Figure()
-    # Ajusta cor do texto para ser legível no tema
     fig.add_annotation(text=text, xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False, font=dict(color="var(--text-secondary)"))
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=DEFAULT_CHART_HEIGHT)
+    return fig
+
+# Funções de Plotly mantidas
+def plot_saldo_acumulado(df: pd.DataFrame) -> go.Figure:
+    if df.empty:
+        return _get_empty_fig()
+    daily = df.groupby(df["DATA"].dt.date)["Saldo Acumulado"].last().reset_index()
+    daily["DATA"] = pd.to_datetime(daily["DATA"])
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=daily["DATA"], y=daily["Saldo Acumulado"], mode="lines+markers",
+                             name="Saldo", line=dict(color=COLORS["saldo"], width=2)))
+    if len(daily) > 1:
+        X = daily["DATA"].map(pd.Timestamp.toordinal).values.reshape(-1, 1)
+        y = daily["Saldo Acumulado"].values
+        reg = LinearRegression().fit(X, y)
+        X_line = np.linspace(X.min(), X.max(), 100).reshape(-1,1)
+        y_pred = reg.predict(X_line)
+        dates_line = [datetime.fromordinal(int(x)) for x in X_line.flatten()]
+        fig.add_trace(go.Scatter(x=dates_line, y=y_pred, mode="lines", name="Tendência", line=dict(color=COLORS["trend"], dash="dash")))
+    fig.update_layout(height=DEFAULT_CHART_HEIGHT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+    fig.update_xaxes(title_text="Data")
+    fig.update_yaxes(title_text="Saldo (R$)")
+    return fig
+
+def plot_fluxo_diario(df: pd.DataFrame) -> go.Figure:
+    if df.empty:
+        return _get_empty_fig()
+    fluxo = df.groupby(df["DATA"].dt.date)["VALOR_NUM"].sum().reset_index()
+    fluxo["DATA"] = pd.to_datetime(fluxo["DATA"])
+    cores = [COLORS["receita"] if v >= 0 else COLORS["despesa"] for v in fluxo["VALOR_NUM"]]
+    fig = go.Figure(go.Bar(x=fluxo["DATA"], y=fluxo["VALOR_NUM"], marker_color=cores))
+    fig.update_layout(height=DEFAULT_CHART_HEIGHT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+    fig.update_xaxes(title_text="Data")
+    fig.update_yaxes(title_text="Valor (R$)")
     return fig
 
 def plot_categoria_barras(df: pd.DataFrame, kind: str = "Receita", category_colors: Dict[str,str]=None) -> go.Figure:
@@ -326,27 +347,119 @@ def plot_categoria_barras(df: pd.DataFrame, kind: str = "Receita", category_colo
     fig.update_yaxes(title_text="Categoria")
     return fig
 
-def plot_pie_composicao(df: pd.DataFrame, kind: str = "Receita", category_colors: Dict[str,str]=None) -> go.Figure:
-    # Substituição final do Donut por Pie (Setor Completo)
+def plot_treemap_composicao(df: pd.DataFrame, kind: str = "Receita", category_colors: Dict[str,str]=None) -> go.Figure:
+    # Substituição do Pie/Donut por Treemap
     if kind == "Receita":
-        series = df[df["VALOR_NUM"] > 0].groupby("CATEGORIA")["VALOR_NUM"].sum()
+        df_plot = df[df["VALOR_NUM"] > 0].groupby("CATEGORIA")["VALOR_NUM"].sum().reset_index()
+        df_plot.columns = ["CATEGORIA", "VALOR"]
     else:
-        series = (-df[df["VALOR_NUM"] < 0].groupby("CATEGORIA")["VALOR_NUM"].sum())
-    if series.empty:
+        df_plot = df[df["VALOR_NUM"] < 0].groupby("CATEGORIA")["VALOR_NUM"].sum().abs().reset_index()
+        df_plot.columns = ["CATEGORIA", "VALOR"]
+        
+    if df_plot.empty:
         return _get_empty_fig(f"Sem dados de {kind}")
-    series = series.sort_values(ascending=False)
-    labels = series.index.tolist()
-    values = series.values
-    marker_colors = [category_colors.get(l, COLORS["neutral"]) for l in labels] if category_colors else None
-    # Usando hole=0 para garantir um Pie Chart completo (Setor)
-    fig = go.Figure(go.Pie(labels=labels, values=values, hole=0, marker=dict(colors=marker_colors),
-                           textinfo='percent+label', textposition='outside', insidetextorientation='radial', sort=False))
+
+    fig = px.treemap(df_plot, path=[px.Constant("Total"), 'CATEGORIA'], values='VALOR',
+                     color='CATEGORIA', color_discrete_map={**category_colors, "Total": INSTITUTIONAL["azul"]}) # Cor do "Total"
     fig.update_layout(height=DEFAULT_CHART_HEIGHT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                      legend=dict(orientation='h', y=-0.15, x=0.5, xanchor='center'),
-                      title=f'Composição de {kind} (Setor)') 
+                      title=f'Composição de {kind} (Treemap)')
+    fig.update_traces(textinfo='label+percent entry') # Exibe rótulo e porcentagem
     return fig
-    
-# Funções de filtro, KPIs e main mantidas para a lógica operacional...
+
+# Outros gráficos mantidos para a aba "Análise Avançada"
+def plot_bubble_transacoes_categoria_y(df: pd.DataFrame, category_colors: Dict[str,str]=None) -> go.Figure:
+    if df.empty:
+        return _get_empty_fig("Sem transações")
+    df_plot = df.copy()
+    df_plot["Size"] = df_plot["VALOR_NUM"].abs()
+    df_plot["VALOR_FMT"] = df_plot["VALOR_NUM"].apply(money_fmt_br)
+    fig = px.scatter(df_plot, x="DATA", y="CATEGORIA", size="Size", color="CATEGORIA",
+                     hover_name="DESCRIÇÃO", hover_data={"VALOR_FMT": True, "DATA": False},
+                     color_discrete_map=category_colors, size_max=35)
+    fig.update_traces(marker=dict(opacity=0.85, line=dict(width=0.6, color='rgba(0,0,0,0.12)')))
+    fig.update_layout(height=DEFAULT_CHART_HEIGHT+40, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+    fig.update_xaxes(title_text="Data")
+    fig.update_yaxes(title_text="Categoria")
+    return fig
+
+def plot_bubble_transacoes_valor_y(df: pd.DataFrame, category_colors: Dict[str,str]=None) -> go.Figure:
+    if df.empty:
+        return _get_empty_fig("Sem transações")
+    dfp = df.copy()
+    dfp["VALOR_ABS"] = dfp["VALOR_NUM"].abs()
+    dfp["VALOR_FMT"] = dfp["VALOR_NUM"].apply(money_fmt_br)
+    fig = px.scatter(dfp, x="DATA", y="VALOR_NUM", size="VALOR_ABS", color="CATEGORIA",
+                     hover_name="DESCRIÇÃO", hover_data={"VALOR_FMT": True, "DATA": False},
+                     size_max=35, color_discrete_map=category_colors)
+    fig.update_traces(marker=dict(opacity=0.85, line=dict(width=0.6, color='rgba(0,0,0,0.12)')))
+    fig.update_layout(height=DEFAULT_CHART_HEIGHT+40, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+    fig.update_xaxes(title_text="Data")
+    fig.update_yaxes(title_text="Valor (R$)")
+    return fig
+
+def prepare_ohlc_period(df: pd.DataFrame, freq: str = "D") -> pd.DataFrame:
+    if df.empty:
+        return pd.DataFrame()
+    if freq == "D":
+        period = df["DATA"].dt.to_period("D")
+    elif freq == "W":
+        period = df["DATA"].dt.to_period("W")
+    else:
+        period = df["DATA"].dt.to_period("M")
+    dfp = df.copy()
+    dfp["PERIOD"] = period
+    groups = []
+    for per, g in dfp.groupby("PERIOD"):
+        g_sorted = g.sort_values("DATA")
+        open_v = g_sorted.iloc[0]["VALOR_NUM"]
+        close_v = g_sorted.iloc[-1]["VALOR_NUM"]
+        high_v = g_sorted["VALOR_NUM"].max()
+        low_v = g_sorted["VALOR_NUM"].min()
+        vol = g_sorted["VALOR_NUM"].abs().sum()
+        groups.append({"PERIOD": per, "ts": per.to_timestamp(), "open": open_v, "high": high_v, "low": low_v, "close": close_v, "volume": vol})
+    ohlc = pd.DataFrame(groups).sort_values("ts").reset_index(drop=True)
+    return ohlc
+
+def plot_candlestick(df: pd.DataFrame, freq: str = "D") -> go.Figure:
+    ohlc = prepare_ohlc_period(df, freq)
+    if ohlc.empty:
+        return _get_empty_fig("Sem dados para candlestick")
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.04, row_heights=[0.72, 0.28])
+    fig.add_trace(go.Candlestick(x=ohlc["ts"], open=ohlc["open"], high=ohlc["high"], low=ohlc["low"], close=ohlc["close"],
+                                 increasing_line_color=COLORS["receita"], decreasing_line_color=COLORS["despesa"]), row=1, col=1)
+    fig.add_trace(go.Bar(x=ohlc["ts"], y=ohlc["volume"], name="Volume", marker_color=COLORS["neutral"]), row=2, col=1)
+    ohlc["sma7"] = ohlc["close"].rolling(window=7, min_periods=1).mean()
+    fig.add_trace(go.Scatter(x=ohlc["ts"], y=ohlc["sma7"], mode="lines", name="SMA7", line=dict(color=COLORS["trend"])), row=1, col=1)
+    fig.update_layout(height=DEFAULT_CHART_HEIGHT+80, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis_rangeslider_visible=False)
+    fig.update_xaxes(title_text="Período", row=2, col=1)
+    fig.update_yaxes(title_text="Valor (R$)", row=1, col=1)
+    fig.update_yaxes(title_text="Volume", row=2, col=1)
+    return fig
+
+def plot_monthly_heatmap(df: pd.DataFrame) -> go.Figure:
+    if df.empty:
+        return _get_empty_fig()
+    dfh = df.copy()
+    dfh['day'] = dfh['DATA'].dt.day
+    dfh['ym'] = dfh['DATA'].dt.to_period('M').astype(str)
+    pivot = dfh.groupby(['ym','day'])['VALOR_NUM'].sum().reset_index()
+    heat = pivot.pivot(index='ym', columns='day', values='VALOR_NUM').fillna(0)
+    fig = go.Figure(data=go.Heatmap(z=heat.values, x=heat.columns, y=heat.index, colorscale='RdBu', reversescale=True,
+                                    hovertemplate="Mês: %{y}<br>Dia: %{x}<br>Saldo Diário: %{z:.2f} R$<extra></extra>"))
+    fig.update_layout(title='Heatmap Mensal de Saldo Diário', height=DEFAULT_CHART_HEIGHT+40, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+    fig.update_xaxes(title_text="Dia do Mês")
+    fig.update_yaxes(title_text="Mês")
+    return fig
+
+def plot_boxplot_by_category(df: pd.DataFrame) -> go.Figure:
+    if df.empty:
+        return _get_empty_fig()
+    dfp = df.copy()
+    dfp['VALOR_ABS'] = dfp['VALOR_NUM'].abs()
+    fig = px.box(dfp, x='CATEGORIA', y='VALOR_ABS', points='outliers', color='TIPO', color_discrete_map={"Receita": COLORS["receita"], "Despesa": COLORS["despesa"]})
+    fig.update_layout(height=DEFAULT_CHART_HEIGHT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    fig.update_xaxes(tickangle=-45)
+    return fig
 
 # -------------------- SIDEBAR E FILTROS (MANTIDOS) --------------------
 
@@ -404,7 +517,7 @@ def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
         f = f[f["CATEGORIA"].isin(cats)]
     return f.reset_index(drop=True)
 
-# -------------------- KPIs (REVISADOS) --------------------
+# -------------------- KPIs (MANTIDOS DA ÚLTIMA VERSÃO COM AJUSTES DE HTML) --------------------
 
 def _sum_period(df: pd.DataFrame, start_dt: datetime, end_dt: datetime, tipo: str = "all") -> float:
     if df.empty:
@@ -472,7 +585,7 @@ def render_kpi_cards(df_full: pd.DataFrame, df_filtered: pd.DataFrame):
             title="Receita Total (Período Filtrado)",
             value=money_fmt_br(receita_filtrada),
             delta=f"Últimos 30d: {txt_rec_delta}",
-            value_color=COLORS["receita"],
+            value_color="var(--kpi-receita)", # Usando variáveis CSS
             delta_color=color_rec
         )
     with c2:
@@ -480,7 +593,7 @@ def render_kpi_cards(df_full: pd.DataFrame, df_filtered: pd.DataFrame):
             title="Despesa Total (Período Filtrado)",
             value=money_fmt_br(abs(despesa_filtrada)),
             delta=f"Últimos 30d: {txt_dep_delta}",
-            value_color=COLORS["despesa"],
+            value_color="var(--kpi-despesa)", # Usando variáveis CSS
             delta_color=color_dep
         )
     with c3:
@@ -488,7 +601,7 @@ def render_kpi_cards(df_full: pd.DataFrame, df_filtered: pd.DataFrame):
             title="Saldo Total (Período Filtrado)",
             value=money_fmt_br(saldo_filtrado),
             delta=f"Últimos 30d: {txt_saldo_delta}",
-            value_color=COLORS["saldo"],
+            value_color="var(--kpi-saldo)", # Usando variáveis CSS
             delta_color=color_saldo
         )
 
@@ -497,10 +610,10 @@ def _render_kpi_card_html(title: str, value: str, delta: str, value_color: str, 
     arrow_color = "var(--text-secondary)"
     if delta_color == "normal":
         arrow = "▲"
-        arrow_color = COLORS["receita"]
+        arrow_color = "var(--kpi-receita)"
     elif delta_color == "inverse":
         arrow = "▼"
-        arrow_color = COLORS["despesa"]
+        arrow_color = "var(--kpi-despesa)"
     html = f"""
     <div class="kpi-card">
       <div class="kpi-label">{title}</div>
@@ -509,6 +622,22 @@ def _render_kpi_card_html(title: str, value: str, delta: str, value_color: str, 
     </div>
     """
     st.markdown(html, unsafe_allow_html=True)
+
+# -------------------- TABELA / EXPORT (MANTIDOS) --------------------
+
+def render_table(df: pd.DataFrame, key: str):
+    if df.empty:
+        st.info("Sem lançamentos para mostrar com os filtros atuais.")
+        return
+    df_display = df.copy()
+    df_display["Data"] = df_display["DATA"].dt.date
+    df_display["Valor (R$)"] = df_display["VALOR_NUM"].apply(money_fmt_br)
+    df_display = df_display.rename(columns={"TIPO":"Tipo","CATEGORIA":"Categoria","DESCRIÇÃO":"Descrição","OBSERVAÇÃO":"Observação"})
+    st.dataframe(df_display[["Data","Tipo","Categoria","Descrição","Valor (R$)","Observação"]], use_container_width=True, key=key, hide_index=True)
+
+def _prepare_export_csv(df: pd.DataFrame) -> str:
+    export_df = df[["DATA","TIPO","CATEGORIA","DESCRIÇÃO","VALOR","OBSERVAÇÃO"]]
+    return export_df.to_csv(index=False, encoding="utf-8-sig")
 
 # -------------------- MAIN --------------------
 
@@ -548,16 +677,18 @@ def main():
     st.markdown("---")
 
     if page == "Resumo Financeiro":
-        # ... Conteúdo Resumo Financeiro
         st.subheader("Evolução do Saldo Acumulado")
-        # Gráficos de Resumo omitidos para brevidade, mas mantidos no código final
-        
-        # ...
+        st.plotly_chart(plot_saldo_acumulado(df_filtered), use_container_width=True, config={'displayModeBar': False}, key="chart_saldo_line_resumo")
+
+        st.subheader("Fluxo de Caixa Diário")
+        st.plotly_chart(plot_fluxo_diario(df_filtered), use_container_width=True, config={'displayModeBar': False}, key="chart_fluxo_bar_resumo")
 
         st.subheader("Lançamentos Recentes (Últimos 10)")
         recent = df_filtered.sort_values("DATA", ascending=False).head(10)
-        # render_table(recent, key="table_recent_resumo") # Tabela omitida para brevidade
-        # ...
+        render_table(recent, key="table_recent_resumo")
+
+        csv = _prepare_export_csv(df_filtered)
+        st.download_button("Exportar CSV (Filtro Atual)", csv, file_name="caec_resumo_export.csv", mime="text/csv", key="download_resumo")
 
     else:
         tab_normais, tab_avancados, tab_tabela = st.tabs(["📊 Gráficos Principais", "📈 Análise Avançada", "📋 Tabela Completa"])
@@ -571,27 +702,52 @@ def main():
             with col2:
                 st.plotly_chart(plot_categoria_barras(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_dep_bar_comb")
 
-            # Gráficos de Setor (Pie Charts) (Embaixo)
+            # Treemap (Embaixo)
             col3, col4 = st.columns(2)
             with col3:
-                st.plotly_chart(plot_pie_composicao(df_filtered, kind="Receita", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_pie_rec_comb")
+                st.plotly_chart(plot_treemap_composicao(df_filtered, kind="Receita", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_treemap_rec_comb")
             with col4:
-                st.plotly_chart(plot_pie_composicao(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_pie_dep_comb")
+                st.plotly_chart(plot_treemap_composicao(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_treemap_dep_comb")
 
             st.markdown("---")
             st.subheader("Visão Temporal de Lançamentos (por Categoria)")
-            # Gráficos de bolhas omitidos para brevidade, mas mantidos no código final
-            # ...
+            st.plotly_chart(plot_bubble_transacoes_categoria_y(df_filtered, category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_bubble_cat_y")
+            st.markdown("---")
+            st.subheader("Visão Detalhada de Transações")
+            st.plotly_chart(plot_bubble_transacoes_valor_y(df_filtered, category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_bubble_valor_y")
 
         with tab_avancados:
-            # Conteúdo Avançado
-            # ...
-            pass
-        
+            agg_freq = st.selectbox("Agregação Candlestick", options=[("Diário","D"), ("Semanal","W"), ("Mensal","M")], format_func=lambda x: x[0], key="sb_candle_freq")
+            freq_code = agg_freq[1]
+            st.subheader(f"Análise Candlestick ({agg_freq[0]}) e Volume")
+            st.plotly_chart(plot_candlestick(df_filtered, freq=freq_code), use_container_width=True, config={'displayModeBar': False}, key=f"chart_candlestick_{freq_code}")
+
+            st.markdown("---")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("Fluxo Diário com Média Móvel (14 dias)")
+                fluxo = df_filtered.groupby(df_filtered["DATA"].dt.date)["VALOR_NUM"].sum().reset_index()
+                fluxo["DATA"] = pd.to_datetime(fluxo["DATA"])
+                fluxo["sma14"] = fluxo["VALOR_NUM"].rolling(window=14, min_periods=1).mean()
+                fig_ma = go.Figure()
+                cores_fluxo = [COLORS["receita"] if v >= 0 else COLORS["despesa"] for v in fluxo["VALOR_NUM"]]
+                fig_ma.add_trace(go.Bar(x=fluxo["DATA"], y=fluxo["VALOR_NUM"], name="Fluxo Diário", marker_color=cores_fluxo))
+                fig_ma.add_trace(go.Scatter(x=fluxo["DATA"], y=fluxo["sma14"], mode="lines", name="SMA14 (14 dias)", line=dict(color=COLORS["trend"])))
+                fig_ma.update_layout(height=DEFAULT_CHART_HEIGHT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+                st.plotly_chart(fig_ma, use_container_width=True, config={'displayModeBar': False}, key="chart_sma14_avancado")
+            with col2:
+                st.subheader("Distribuição de Valores por Categoria (Boxplot)")
+                st.plotly_chart(plot_boxplot_by_category(df_filtered), use_container_width=True, config={'displayModeBar': False}, key="chart_box_avancado")
+
+            st.markdown("---")
+            st.subheader("Heatmap de Saldo Diário")
+            st.plotly_chart(plot_monthly_heatmap(df_filtered), use_container_width=True, config={'displayModeBar': False}, key="chart_heatmap_avancado")
+
         with tab_tabela:
-            # Tabela Completa
-            # ...
-            pass
+            st.subheader("Todos os Lançamentos (Filtro Atual)")
+            render_table(df_filtered, key="table_full_detalhado")
+            csv = _prepare_export_csv(df_filtered)
+            st.download_button("Exportar CSV (Filtro Atual)", csv, file_name="caec_full_export.csv", mime="text/csv", key="download_full")
 
     st.markdown("---")
     st.markdown(f"<div style='text-align:center;color:var(--text-secondary);'>CAEC © 2025 — Criado e administrado pela diretoria de Administração Comercial e Financeiro — <strong>by Rick</strong></div>", unsafe_allow_html=True)
