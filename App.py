@@ -2,7 +2,6 @@
 """
 Dashboard Financeiro Caec
 Versão refatorada para uso com Streamlit Cloud Secrets.
-Estilo (fonte e cores) e lógica de KPI de saldo aprimorados.
 """
 
 from datetime import datetime, timedelta
@@ -25,62 +24,23 @@ from sklearn.linear_model import LinearRegression
 # Colunas esperadas na planilha. A ordem importa para a montagem do DataFrame.
 EXPECTED_COLS = ["DATA", "TIPO", "CATEGORIA", "DESCRIÇÃO", "VALOR", "OBSERVAÇÃO"]
 
-# Paleta de cores padrão para os gráficos (Cores mais vibrantes)
+# Paleta de cores padrão para os gráficos
 COLORS = {
-    "receita": "#28a745",  # Verde vibrante
-    "despesa": "#dc3545",  # Vermelho vibrante
-    "saldo": "#007bff",   # Azul
+    "receita": "#2ca02c",  # Verde
+    "despesa": "#d62728",  # Vermelho
+    "saldo": "#636efa",   # Azul
     "neutral": "#6c757d",  # Cinza
 }
 
 # Altura padrão para a maioria dos gráficos
 DEFAULT_CHART_HEIGHT = 360
 
-# ---------- CSS (Fonte customizada e estilo para KPI) ----------
-FONT_CSS = f"""
+# ---------- CSS (Fonte customizada) ----------
+FONT_CSS = """
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
-  /* Aplica Roboto Mono em todo o app */
-  .stApp, .stApp * {{ font-family: 'Roboto Mono', monospace !important; }}
-  
-  /* Estiliza o Título e Subtítulos */
-  .stApp h1, .stApp h2, .stApp h3 {{ font-family: 'Roboto Mono', monospace !important; font-weight: 700; }}
-
-  /* Estilização para o widget st.metric (KPIs) */
-  .stMetric {{
-    background-color: #212529; /* Fundo escuro sutil */
-    padding: 15px;
-    border-radius: 8px;
-    border: 1px solid #343a40;
-    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
-  }}
-
-  /* Estilização do valor principal do KPI (cores) */
-  .stMetric:nth-child(1) [data-testid="stMetricValue"] {{
-    color: {COLORS['receita']};
-  }}
-  .stMetric:nth-child(2) [data-testid="stMetricValue"] {{
-    color: {COLORS['despesa']};
-  }}
-  .stMetric:nth-child(3) [data-testid="stMetricValue"] {{
-    color: {COLORS['saldo']};
-  }}
-  
-  /* Corrige a cor dos deltas (setas) */
-  /* Delta Positivo (cor de Receita) - usa a classe interna do Streamlit */
-  .css-1ht1vst.e16fv1kl1 {{ color: {COLORS['receita']} !important; }}
-  /* Delta Negativo (cor de Despesa) - usa a classe interna do Streamlit */
-  .css-1ht1vst.e16fv1kl1.inverse {{ color: {COLORS['despesa']} !important; }}
-  
-  /* Estiliza a sidebar para ter mais destaque */
-  [data-testid="stSidebar"] {{
-    background-color: #1a1a1a;
-  }}
-  
-  /* Estiliza mensagens de erro/aviso para não quebrar o tema escuro (opcional, mas recomendado) */
-  [data-testid="stAlert"] div[role="alert"] {{
-    background-color: #1a1a1a; 
-  }}
+  :root { font-family: 'Roboto Mono', monospace; }
+  .stApp { font-family: 'Roboto Mono', monospace; }
 </style>
 """
 
@@ -664,32 +624,29 @@ def render_kpis(df: pd.DataFrame):
     
     c1, c2, c3 = st.columns(3)
     
-    # KPI 1: Receita Total
+    # Usando st.metric para um visual padrão e limpo
     c1.metric(
         label="Receita Total", 
         value=money_fmt_br(receita), 
-        delta=None, # Mantém o delta vazio para Receita e Despesa
         delta_color="normal"
     )
-    
-    # KPI 2: Despesa Total (Mostra o valor absoluto, sem delta)
     c2.metric(
         label="Despesa Total", 
         value=money_fmt_br(abs(despesa)), 
-        delta=None, # Mantém o delta vazio para Receita e Despesa
         delta_color="inverse"
     )
-    
-    # KPI 3: Saldo - A seta e a cor são baseadas no valor do Saldo (como solicitado)
-    delta_text = f"{money_fmt_br(saldo)}" # Mostra o próprio valor formatado como "delta"
-    delta_type = "normal" if saldo >= 0 else "inverse"
-    
     c3.metric(
         label="Saldo (Receita - Despesa)", 
         value=money_fmt_br(saldo), 
-        delta=delta_text, # Usa o valor do saldo como delta
-        delta_color=delta_type
+        delta="Positivo" if saldo >= 0 else "Negativo",
+        delta_color="normal" if saldo >= 0 else "inverse"
     )
+    
+    # Alternativa com HTML customizado (se preferir as cores exatas)
+    # with c1:
+    #     st.markdown(f"<div style='font-size:12px;color:{COLORS['neutral']};text-transform:uppercase'>Receita</div>", unsafe_allow_html=True)
+    #     st.markdown(f"<div style='font-weight:700;color:{COLORS['receita']};font-size:20px'>{money_fmt_br(receita)}</div>", unsafe_allow_html=True)
+    # ... (similar para c2 e c3)
 
 def render_table(df: pd.DataFrame, key: str):
     """Renderiza a tabela de lançamentos usando st.dataframe."""
@@ -726,7 +683,7 @@ def render_table(df: pd.DataFrame, key: str):
 
 def _prepare_export_csv(df: pd.DataFrame) -> str:
     """Prepara o DataFrame para exportação e o converte para CSV."""
-    export_df = df[["DATA","TIPO","CATEGORIA","DESCRIÇÃO","VALOR","OBSERVACÃO"]]
+    export_df = df[["DATA","TIPO","CATEGORIA","DESCRIÇÃO","VALOR","OBSERVAÇÃO"]]
     # Usa encoding 'utf-8-sig' para garantir compatibilidade com Excel
     return export_df.to_csv(index=False, encoding="utf-8-sig")
 
