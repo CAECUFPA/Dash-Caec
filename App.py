@@ -1,8 +1,3 @@
-"""
-Dashboard Financeiro Caec — Versão FINAL #7: Otimização de Cores, Cards e Novo Gráfico de %.
-Foco em resolver a visibilidade do título, arredondar bordas e substituir o Treemap.
-"""
-
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple, Optional
 
@@ -73,7 +68,8 @@ def get_dynamic_css() -> str:
       --sidebar-border: rgba(200, 200, 200, 0.8);
       --bg-line-color: var(--bg-line-color-light);
       --card-padding: 18px; 
-      --h1-color: #000000; /* Preto para Light Mode */
+      --h1-color: #000000; /* Preto forte para Light Mode */
+      --kpi-label-color: var(--st-font-color); /* Usa a cor de texto padrão do tema (Escuro no Light Mode) */
     }}
 
     @media (prefers-color-scheme: dark) {{
@@ -83,7 +79,8 @@ def get_dynamic_css() -> str:
             --sidebar-bg-transparent: rgba(11, 20, 26, 0.4); 
             --sidebar-border: rgba(44, 54, 65, 0.8);
             --bg-line-color: var(--bg-line-color-dark);
-            --h1-color: #FFFFFF; /* Branco para Dark Mode */
+            --h1-color: #FFFFFF; /* Branco forte para Dark Mode */
+            --kpi-label-color: var(--st-font-color-weak); /* Usa a cor de texto fraca do tema (Claro no Dark Mode) */
         }}
     }}
     
@@ -116,7 +113,7 @@ def get_dynamic_css() -> str:
       {BLUEPRINT_BACKGROUND_CSS} 
     }}
 
-    /* CORRIGIDO: Título H1 com cor dinâmica (preto/branco) */
+    /* CORRIGIDO: Título H1 com cor dinâmica (preto/branco) - usa var(--h1-color) */
     h1 {{ 
         margin-top: 0rem; 
         margin-bottom: 1rem; 
@@ -164,6 +161,7 @@ def get_dynamic_css() -> str:
 
     /* CORRIGIDO: Fundo dos Gráficos (Plotly) */
     /* Define um fundo SÓLIDO para a área de plotagem, usando a cor secundária do tema */
+    /* Os labels do Plotly vão herdar o st-font-color do stApp ou do seu container pai */
     .modebar, .plotly, .js-plotly-plot, .plotly-container {{
       background-color: var(--st-bgs2) !important;
       border-radius: 10px; /* Arredonda o fundo do gráfico */
@@ -189,8 +187,9 @@ def get_dynamic_css() -> str:
       justify-content: space-between; 
       overflow: hidden; 
     }}
+    /* CORRIGIDO: Usa var(--kpi-label-color) que é dinâmico, mas tende a ser escuro no Light Mode e fraco no Dark Mode */
     .kpi-label, .kpi-delta {{ 
-        color: var(--st-font-color-weak); 
+        color: var(--kpi-label-color); 
         font-size: 13px;
     }}
     .kpi-value {{ 
@@ -199,6 +198,7 @@ def get_dynamic_css() -> str:
     }}
 
     /* Footer */
+    /* CORRIGIDO: Usa var(--st-font-color-weak) para o footer */
     footer {{ color: var(--st-font-color-weak); text-align:center; padding-top:10px; }}
     """
     return f"<style>{css_vars}</style>"
@@ -577,7 +577,7 @@ def _kpi_delta_text_and_color(curr: float, prev: float, positive_is_good: bool =
 
 def _render_kpi_card_html(title: str, value: str, delta: str, value_color_css_var: str, delta_color: str):
     arrow = "—"
-    arrow_color = "var(--st-font-color-weak)"
+    arrow_color = "var(--kpi-label-color)" # Usa a cor do label/delta
     if delta_color == "normal":
         arrow = "▲"
         arrow_color = "var(--kpi-receita)"
@@ -589,7 +589,7 @@ def _render_kpi_card_html(title: str, value: str, delta: str, value_color_css_va
     <div class="kpi-card">
       <div class="kpi-label">{title}</div>
       <div class="kpi-value" style="color:{value_color_css_var};">{value}</div>
-      <div class="kpi-delta"><span style="color:{arrow_color}; font-weight:700;">{arrow}</span><span style="color:var(--st-font-color-weak);"> {delta}</span></div>
+      <div class="kpi-delta"><span style="color:{arrow_color}; font-weight:700;">{arrow}</span><span style="color:var(--kpi-label-color);"> {delta}</span></div>
     </div>
     """
     st.markdown(html, unsafe_allow_html=True)
@@ -804,3 +804,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
