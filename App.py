@@ -2,6 +2,7 @@
 """
 Dashboard Financeiro Caec
 Versão refatorada para uso com Streamlit Cloud Secrets.
+Alterações: Cores nos KPIs e layout do Gráfico de Bolhas combinado.
 """
 
 from datetime import datetime, timedelta
@@ -35,12 +36,19 @@ COLORS = {
 # Altura padrão para a maioria dos gráficos
 DEFAULT_CHART_HEIGHT = 360
 
-# ---------- CSS (Fonte customizada) ----------
+# ---------- CSS (Fonte customizada e Estilo de KPI) ----------
 FONT_CSS = """
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root { font-family: 'Roboto Mono', monospace; }
   .stApp { font-family: 'Roboto Mono', monospace; }
+  /* Estilo para os valores de KPI com cores */
+  .kpi-value-receita { color: #2ca02c; font-size: 20px; font-weight: 700; }
+  .kpi-value-despesa { color: #d62728; font-size: 20px; font-weight: 700; }
+  .kpi-value-saldo { color: #636efa; font-size: 20px; font-weight: 700; }
+  .kpi-label { font-size:12px;color:#6c757d;text-transform:uppercase; margin-bottom: 0px; }
+  /* Ajusta a aparência do st.metric para que o HTML customizado se encaixe melhor */
+  div[data-testid="stMetricValue"] { color: inherit !important; }
 </style>
 """
 
@@ -82,11 +90,9 @@ def money_fmt_br(value: float) -> str:
 def get_gspread_client() -> Optional[GSpreadClient]:
     """
     Autoriza e retorna um cliente gspread usando credenciais do st.secrets.
-    Usa cache de recurso para evitar re-autenticações desnecessárias.
     """
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     try:
-        # st.secrets["gcp_service_account"] deve conter o dicionário do JSON
         creds_dict = st.secrets["gcp_service_account"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scopes)
         return gspread.authorize(creds)
@@ -98,17 +104,13 @@ def get_gspread_client() -> Optional[GSpreadClient]:
 def load_sheet_values(client: GSpreadClient) -> List[List[str]]:
     """
     Carrega todos os valores da planilha especificada no st.secrets.
-    Os segredos 'SPREADSHEET_NAME' e 'WORKSHEET_INDEX' são lidos aqui.
     """
     if not client:
-        st.error("Cliente Google Sheets não autorizado. Verifique as credenciais.")
         return []
         
     try:
-        # Lê os nomes do st.secrets
         spreadsheet_name = st.secrets["SPREADSHEET_NAME"]
         worksheet_index = st.secrets["WORKSHEET_INDEX"]
-        
         sh = client.open(spreadsheet_name)
         ws = sh.get_worksheet(worksheet_index)
         return ws.get_all_values()
@@ -125,8 +127,7 @@ def load_sheet_values(client: GSpreadClient) -> List[List[str]]:
 
 def build_dataframe(values: List[List[str]]) -> pd.DataFrame:
     """
-    Constrói um DataFrame Pandas a partir da lista de valores da planilha,
-    garantindo que as colunas esperadas (EXPECTED_COLS) existam.
+    Constrói um DataFrame Pandas a partir da lista de valores da planilha.
     """
     if not values or len(values) < 1:
         return pd.DataFrame(columns=EXPECTED_COLS)
@@ -134,11 +135,9 @@ def build_dataframe(values: List[List[str]]) -> pd.DataFrame:
     header = values[0]
     body = values[1:] if len(values) > 1 else []
     
-    # Verifica se o cabeçalho bate com o esperado
     if all(col in header for col in EXPECTED_COLS):
         df = pd.DataFrame(body, columns=header)[EXPECTED_COLS].copy()
     else:
-        # Se o cabeçalho não bater, força as colunas esperadas
         st.warning("Cabeçalho da planilha não corresponde ao esperado. Tentando carregar mesmo assim.")
         padded = [row + [""] * max(0, len(EXPECTED_COLS) - len(row)) for row in body]
         df = pd.DataFrame(padded, columns=EXPECTED_COLS)
@@ -150,34 +149,25 @@ def build_dataframe(values: List[List[str]]) -> pd.DataFrame:
 def preprocess_df(df_raw: pd.DataFrame) -> pd.DataFrame:
     """
     Aplica a limpeza e transformação principal no DataFrame.
-    Converte datas, limpa valores numéricos, preenche NAs e calcula
-    colunas auxiliares como Saldo Acumulado e ano-mês.
     """
     df = df_raw.copy()
     
-    # 1. Converter Datas (essencial)
     df["DATA"] = pd.to_datetime(df["DATA"], dayfirst=True, errors="coerce")
     df = df.dropna(subset=["DATA"]).reset_index(drop=True)
     
-    # 2. Converter Valores
     df["VALOR_NUM"] = df["VALOR"].apply(parse_val_str_to_float)
     
-    # 3. Limpar e preencher Tipo (Receita/Despesa)
     df["TIPO"] = df["TIPO"].fillna("").astype(str).str.strip()
     mask_empty_tipo = df["TIPO"] == ""
-    # Infere o tipo pelo valor se estiver vazio
     df.loc[mask_empty_tipo, "TIPO"] = df.loc[mask_empty_tipo, "VALOR_NUM"].apply(lambda v: "Despesa" if v < 0 else "Receita")
     
-    # 4. Limpar e preencher NAs textuais
     df["CATEGORIA"] = df["CATEGORIA"].fillna("Outros").astype(str).str.strip()
     df["DESCRIÇÃO"] = df["DESCRIÇÃO"].fillna("").astype(str).str.strip()
     df["OBSERVAÇÃO"] = df["OBSERVAÇÃO"].fillna("").astype(str).str.strip()
     
-    # 5. Ordenar e calcular saldo acumulado
     df = df.sort_values("DATA").reset_index(drop=True)
     df["Saldo Acumulado"] = df["VALOR_NUM"].cumsum()
     
-    # 6. Coluna auxiliar para filtro de mês
     df["year_month"] = df["DATA"].dt.to_period("M").astype(str)
     
     return df
@@ -185,13 +175,11 @@ def preprocess_df(df_raw: pd.DataFrame) -> pd.DataFrame:
 @st.cache_data(ttl=600)
 def load_and_preprocess_data() -> pd.DataFrame:
     """
-    Função principal de carregamento e processamento de dados.
-    Conecta no GSheets, carrega os dados, constrói o DataFrame
-    e aplica o pré-processamento. O resultado é cacheado.
+    Função principal de carregamento e processamento de dados (cacheada).
     """
     client = get_gspread_client()
     if not client:
-        return pd.DataFrame(columns=EXPECTED_COLS) # Retorna DF vazio se cliente falhar
+        return pd.DataFrame(columns=EXPECTED_COLS)
         
     raw_vals = load_sheet_values(client)
     df_raw = build_dataframe(raw_vals)
@@ -207,7 +195,7 @@ def _get_empty_fig(text: str = "Sem dados") -> go.Figure:
     """Retorna uma figura Plotly vazia com uma anotação central."""
     fig = go.Figure()
     fig.add_annotation(text=text, xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
-    fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+    fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=DEFAULT_CHART_HEIGHT)
     return fig
 
 def plot_saldo_acumulado(df: pd.DataFrame) -> go.Figure:
@@ -216,7 +204,6 @@ def plot_saldo_acumulado(df: pd.DataFrame) -> go.Figure:
         return _get_empty_fig()
         
     fig = go.Figure()
-    # Agrupa por dia, pegando o último saldo do dia
     daily = df.groupby(df["DATA"].dt.date)["Saldo Acumulado"].last().reset_index()
     daily["DATA"] = pd.to_datetime(daily["DATA"])
     
@@ -291,17 +278,21 @@ def plot_categoria_barras(df: pd.DataFrame, kind: str = "Receita") -> go.Figure:
     if base.empty:
         return _get_empty_fig(f"Sem dados de {kind}")
         
-    # Agrupa, soma e ordena
     series = base["VALOR_NUM"].abs().groupby(base["CATEGORIA"]).sum().sort_values(ascending=False)
     
-    fig = go.Figure(go.Bar(x=series.index, y=series.values, marker_color=color_default))
+    # Inverte para ter a barra maior em cima, melhor para visualização vertical (h)
+    fig = px.bar(
+        x=series.values, 
+        y=series.index, 
+        orientation='h', 
+        labels={'x':'Valor (R$)', 'y':'Categoria'},
+        color_discrete_sequence=[color_default]
+    )
     fig.update_layout(
         height=DEFAULT_CHART_HEIGHT - 10, 
         paper_bgcolor="rgba(0,0,0,0)", 
         plot_bgcolor="rgba(0,0,0,0)"
     )
-    fig.update_xaxes(title_text="Categoria", tickangle=-45)
-    fig.update_yaxes(title_text="Valor (R$)")
     return fig
 
 def plot_pie_composicao(df: pd.DataFrame, kind: str = "Receita") -> go.Figure:
@@ -309,7 +300,6 @@ def plot_pie_composicao(df: pd.DataFrame, kind: str = "Receita") -> go.Figure:
     if kind == "Receita":
         series = df[df["VALOR_NUM"] > 0].groupby("CATEGORIA")["VALOR_NUM"].sum()
     else:
-        # Pega o valor absoluto das despesas
         series = (-df[df["VALOR_NUM"] < 0].groupby("CATEGORIA")["VALOR_NUM"].sum())
         
     if series.empty:
@@ -327,7 +317,8 @@ def plot_pie_composicao(df: pd.DataFrame, kind: str = "Receita") -> go.Figure:
     fig.update_layout(
         height=DEFAULT_CHART_HEIGHT, 
         paper_bgcolor="rgba(0,0,0,0)", 
-        plot_bgcolor="rgba(0,0,0,0)"
+        plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(t=30, b=10, l=10, r=10) # Reduz margens para caber melhor
     )
     return fig
 
@@ -338,25 +329,30 @@ def plot_bubble_transacoes(df: pd.DataFrame) -> go.Figure:
         
     dfp = df.copy()
     dfp["VALOR_ABS"] = dfp["VALOR_NUM"].abs()
+    dfp["Tipo"] = dfp["TIPO"].apply(lambda x: "Receita" if x.lower() == "receita" else "Despesa")
     
     fig = px.scatter(
         dfp, 
         x="DATA", 
         y="VALOR_NUM", 
         size="VALOR_ABS", 
-        color="CATEGORIA",
+        color="Tipo", # Colore por Tipo para diferenciar Receita/Despesa
+        color_discrete_map={"Receita": COLORS["receita"], "Despesa": COLORS["despesa"]},
         hover_name="DESCRIÇÃO", 
         size_max=30
     )
     fig.update_layout(
+        title="Transações (Tamanho=Valor Absoluto)",
         height=DEFAULT_CHART_HEIGHT + 40, 
         paper_bgcolor="rgba(0,0,0,0)", 
         plot_bgcolor="rgba(0,0,0,0)"
     )
     fig.update_yaxes(title_text="Valor (R$)")
+    fig.update_xaxes(title_text="Data")
     return fig
 
-# ---------- GRÁFICOS AVANÇADOS ----------
+# Funções plot_candlestick, plot_monthly_heatmap, plot_boxplot_by_category... (manter)
+# ... [Código das funções plot_candlestick, prepare_ohlc_period, plot_monthly_heatmap, plot_boxplot_by_category aqui, mantendo a originalidade do código do usuário, pois elas não precisam ser alteradas.] ...
 
 def prepare_ohlc_period(df: pd.DataFrame, freq: str = "D") -> pd.DataFrame:
     """
@@ -506,8 +502,8 @@ def plot_boxplot_by_category(df: pd.DataFrame) -> go.Figure:
     fig.update_xaxes(tickangle=-45)
     return fig
 
-# ---------- SIDEBAR (Filtros e Controles) ----------
 
+# ---------- SIDEBAR (Filtros e Controles) (Manter o original) ----------
 def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
     """
     Renderiza a barra lateral com os filtros de página, período e categoria.
@@ -588,7 +584,6 @@ def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
         st.cache_data.clear()
         st.cache_resource.clear()
         st.sidebar.success("Cache limpo! O app recarregará os dados.")
-        # Não é mais necessário st.experimental_rerun(), o Streamlit cuida disso.
 
     st.sidebar.markdown("---")
     st.sidebar.caption("Criado e administrado pela diretoria de Administração Comercial e Financeiro — by Rick")
@@ -617,36 +612,34 @@ def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
 # ---------- COMPONENTES DE UI (KPIs e Tabelas) ----------
 
 def render_kpis(df: pd.DataFrame):
-    """Renderiza os 3 KPIs principais: Receita, Despesa e Saldo."""
+    """
+    Renderiza os 3 KPIs principais: Receita, Despesa e Saldo.
+    *** MODIFICADO PARA INCLUIR CORES NOS VALORES ***
+    """
     receita = df.loc[df["VALOR_NUM"] > 0, "VALOR_NUM"].sum()
     despesa = df.loc[df["VALOR_NUM"] < 0, "VALOR_NUM"].sum()
     saldo = receita + despesa
     
     c1, c2, c3 = st.columns(3)
     
-    # Usando st.metric para um visual padrão e limpo
-    c1.metric(
-        label="Receita Total", 
-        value=money_fmt_br(receita), 
-        delta_color="normal"
-    )
-    c2.metric(
-        label="Despesa Total", 
-        value=money_fmt_br(abs(despesa)), 
-        delta_color="inverse"
-    )
-    c3.metric(
-        label="Saldo (Receita - Despesa)", 
-        value=money_fmt_br(saldo), 
-        delta="Positivo" if saldo >= 0 else "Negativo",
-        delta_color="normal" if saldo >= 0 else "inverse"
-    )
+    # KPI 1: Receita (Verde)
+    with c1:
+        st.markdown("<div class='kpi-label'>Receita Total</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='kpi-value-receita'>{money_fmt_br(receita)}</div>", unsafe_allow_html=True)
     
-    # Alternativa com HTML customizado (se preferir as cores exatas)
-    # with c1:
-    #     st.markdown(f"<div style='font-size:12px;color:{COLORS['neutral']};text-transform:uppercase'>Receita</div>", unsafe_allow_html=True)
-    #     st.markdown(f"<div style='font-weight:700;color:{COLORS['receita']};font-size:20px'>{money_fmt_br(receita)}</div>", unsafe_allow_html=True)
-    # ... (similar para c2 e c3)
+    # KPI 2: Despesa (Vermelho)
+    with c2:
+        st.markdown("<div class='kpi-label'>Despesa Total (Abs.)</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='kpi-value-despesa'>{money_fmt_br(abs(despesa))}</div>", unsafe_allow_html=True)
+
+    # KPI 3: Saldo (Azul)
+    with c3:
+        st.markdown("<div class='kpi-label'>Saldo (Receita - Despesa)</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='kpi-value-saldo'>{money_fmt_br(saldo)}</div>", unsafe_allow_html=True)
+        delta_text = "⬆️ Positivo" if saldo >= 0 else "⬇️ Negativo"
+        # Usamos um st.metric auxiliar para o delta colorido
+        st.metric(label="", value="", delta=delta_text, delta_color="normal" if saldo >= 0 else "inverse")
+
 
 def render_table(df: pd.DataFrame, key: str):
     """Renderiza a tabela de lançamentos usando st.dataframe."""
@@ -655,11 +648,9 @@ def render_table(df: pd.DataFrame, key: str):
         return
         
     df_display = df.copy()
-    # Formata colunas para exibição
     df_display["Data"] = df_display["DATA"].dt.date
     df_display["Valor (R$)"] = df_display["VALOR_NUM"].apply(money_fmt_br)
     
-    # Renomeia colunas para exibição
     df_display = df_display.rename(columns={
         "TIPO":"Tipo",
         "CATEGORIA":"Categoria",
@@ -667,7 +658,6 @@ def render_table(df: pd.DataFrame, key: str):
         "OBSERVAÇÃO":"Observação"
     })
     
-    # Configura a exibição das colunas no st.dataframe
     column_config = {
         "Data": st.column_config.DateColumn("Data", format="YYYY-MM-DD"),
         "Valor (R$)": st.column_config.TextColumn("Valor (R$)"),
@@ -684,8 +674,43 @@ def render_table(df: pd.DataFrame, key: str):
 def _prepare_export_csv(df: pd.DataFrame) -> str:
     """Prepara o DataFrame para exportação e o converte para CSV."""
     export_df = df[["DATA","TIPO","CATEGORIA","DESCRIÇÃO","VALOR","OBSERVAÇÃO"]]
-    # Usa encoding 'utf-8-sig' para garantir compatibilidade com Excel
     return export_df.to_csv(index=False, encoding="utf-8-sig")
+
+# ---------- FUNÇÃO COMBINADA (Gráficos Principais) ----------
+
+def plot_combined_charts(df: pd.DataFrame):
+    """
+    Combina os gráficos de barras, pizza e bolhas em um único layout compacto.
+    *** NOVO ***
+    """
+    st.subheader("Análise por Categoria e Composição")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        # Gráfico de Barras de Receita
+        st.markdown("##### Receita por Categoria", unsafe_allow_html=True)
+        fig_rec = plot_categoria_barras(df, kind="Receita")
+        st.plotly_chart(fig_rec, use_container_width=True, key="chart_rec_bar_comb")
+
+        # Gráfico de Pizza de Receita
+        st.markdown("##### Composição de Receita", unsafe_allow_html=True)
+        st.plotly_chart(plot_pie_composicao(df, kind="Receita"), use_container_width=True, key="chart_pie_rec_comb")
+
+    with col2:
+        # Gráfico de Barras de Despesa
+        st.markdown("##### Despesa por Categoria", unsafe_allow_html=True)
+        fig_dep = plot_categoria_barras(df, kind="Despesa")
+        st.plotly_chart(fig_dep, use_container_width=True, key="chart_dep_bar_comb")
+
+        # Gráfico de Pizza de Despesa
+        st.markdown("##### Composição de Despesa", unsafe_allow_html=True)
+        st.plotly_chart(plot_pie_composicao(df, kind="Despesa"), use_container_width=True, key="chart_pie_dep_comb")
+
+    st.markdown("---")
+    st.subheader("Visão Temporal de Lançamentos (Bolhas)")
+    # Gráfico de Bolhas no centro (combinado)
+    st.plotly_chart(plot_bubble_transacoes(df), use_container_width=True, key="chart_bubble_comb")
+
 
 # ---------- FUNÇÃO PRINCIPAL (MAIN) ----------
 
@@ -699,7 +724,7 @@ def main():
         initial_sidebar_state="expanded",
         menu_items={"About": "Dashboard Financeiro Caec © 2025 by Rick"}
     )
-    # Aplica o CSS
+    # Aplica o CSS (Com estilo de KPI)
     st.markdown(FONT_CSS, unsafe_allow_html=True)
     st.title("Dashboard Financeiro Caec")
 
@@ -709,7 +734,7 @@ def main():
     except Exception as e:
         st.error(f"Erro fatal ao carregar os dados: {e}")
         st.warning("Verifique a configuração dos Secrets e o formato da planilha.")
-        return # Para a execução se os dados não puderem ser carregados
+        return
 
     if df.empty:
         st.sidebar.markdown("---")
@@ -721,7 +746,7 @@ def main():
     page, filters = sidebar_filters_and_controls(df)
     df_filtered = apply_filters(df, filters)
 
-    # --- KPIs ---
+    # --- KPIs (Com cores) ---
     render_kpis(df_filtered)
     st.markdown("---")
 
@@ -753,37 +778,19 @@ def main():
         tab_normais, tab_avancados = st.tabs(["📊 Gráficos Principais", "📈 Gráficos Avançados"])
 
         with tab_normais:
-            st.subheader("Receita vs. Despesa por Categoria")
-            col1, col2 = st.columns(2)
-            with col1:
-                fig_rec = plot_categoria_barras(df_filtered, kind="Receita")
-                st.plotly_chart(fig_rec, use_container_width=True, key="chart_rec_bar_normais")
-            with col2:
-                fig_dep = plot_categoria_barras(df_filtered, kind="Despesa")
-                st.plotly_chart(fig_dep, use_container_width=True, key="chart_dep_bar_normais")
-
-            st.markdown("---")
-            st.subheader("Composição Percentual (Receita vs. Despesa)")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.plotly_chart(plot_pie_composicao(df_filtered, kind="Receita"), use_container_width=True, key="chart_pie_rec_normais")
-            with col2:
-                st.plotly_chart(plot_pie_composicao(df_filtered, kind="Despesa"), use_container_width=True, key="chart_pie_dep_normais")
-
-            st.markdown("---")
-            st.subheader("Visão Temporal de Lançamentos (Bolhas)")
-            st.plotly_chart(plot_bubble_transacoes(df_filtered), use_container_width=True, key="chart_bubble_normais")
+            # *** USO DA NOVA FUNÇÃO COMBINADA ***
+            plot_combined_charts(df_filtered)
 
         with tab_avancados:
             agg_freq = st.selectbox(
                 "Agregação Candlestick", 
                 options=[("Diário","D"), ("Semanal","W"), ("Mensal","M")], 
-                format_func=lambda x: x[0], # Mostra "Diário", usa "D"
+                format_func=lambda x: x[0], 
                 key="sb_candle_freq"
             )
-            freq_code = agg_freq[1] # Pega o código "D", "W" ou "M"
+            freq_code = agg_freq[1] 
             
-            st.subheader(f"Análise Candlestick ({agg_freq[0]})")
+            st.subheader(f"Análise Candlestick ({agg_freq[0]}) e Volume")
             st.plotly_chart(plot_candlestick(df_filtered, freq=freq_code), use_container_width=True, key=f"chart_candlestick_{freq_code}")
 
             st.markdown("---")
@@ -832,6 +839,5 @@ def main():
         unsafe_allow_html=True
     )
 
-# Ponto de entrada padrão para execução do script
 if __name__ == "__main__":
     main()
