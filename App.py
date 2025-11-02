@@ -1,6 +1,6 @@
 """
-Dashboard Financeiro Caec — Versão FINAL #7: Otimização de Cores, Cards e Novo Gráfico de %.
-Foco em resolver a visibilidade do título, arredondar bordas e substituir o Treemap.
+Dashboard Financeiro Caec — Versão FINAL #8: Fix Mobile, UI/UX Reforçado e Boas-vindas Animado.
+Foco em resolver a visibilidade dos cards no dark mode e responsividade mobile.
 """
 
 from datetime import datetime, timedelta
@@ -20,12 +20,13 @@ try:
     from gspread.client import Client as GSpreadClient
     from oauth2client.service_account import ServiceAccountCredentials
 except ImportError:
+    # Mock classes if dependencies are not installed
     class GSpreadClient: pass
     class ServiceAccountCredentials:
         @staticmethod
         def from_json_keyfile_dict(a, b): return None
 
-# -------------------- CONFIGURAÇÃO GERAL E CSS CORRIGIDO (Tema Dinâmico, Glassmorphism e Cards) --------------------
+# -------------------- CONFIGURAÇÃO GERAL E CSS CORRIGIDO E REFORÇADO --------------------
 
 EXPECTED_COLS = ["DATA", "TIPO", "CATEGORIA", "DESCRIÇÃO", "VALOR", "OBSERVAÇÃO"]
 
@@ -54,26 +55,22 @@ BLUEPRINT_BACKGROUND_CSS = """
 
 def get_dynamic_css() -> str:
     """
-    Gera o CSS dinâmico. CORRIGIDO: Cores de H1 e Bordas de Cards.
+    Gera o CSS dinâmico. CORRIGIDO: Cores de H1, Bordas de Cards e Responsividade.
     """
     
     css_vars = f"""
     @import url('https://fonts.googleapis.com/css2?family=Anton&family=Six+Caps&family=League+Spartan&family=Open+Sans:wght@400;700&display=swap');
 
     :root {{
-      --caec-azul: {INSTITUTIONAL['azul']};
-      --caec-amarelo: {INSTITUTIONAL['amarelo']};
-      --kpi-receita: {COLORS['receita']};
-      --kpi-despesa: {COLORS['despesa']};
-      --kpi-saldo: {COLORS['saldo']};
-      
       /* Cores base para Light Mode */
+      --caec-azul: {INSTITUTIONAL['azul']};
       --bg-line-color-light: rgba(200, 200, 200, 0.8);
       --sidebar-bg-transparent: rgba(255, 255, 255, 0.15); 
       --sidebar-border: rgba(200, 200, 200, 0.8);
       --bg-line-color: var(--bg-line-color-light);
       --card-padding: 18px; 
       --h1-color: #000000; /* Preto para Light Mode */
+      --card-bg-color: var(--st-bgs2); /* Fundo do card no Light Mode */
     }}
 
     @media (prefers-color-scheme: dark) {{
@@ -84,29 +81,29 @@ def get_dynamic_css() -> str:
             --sidebar-border: rgba(44, 54, 65, 0.8);
             --bg-line-color: var(--bg-line-color-dark);
             --h1-color: #FFFFFF; /* Branco para Dark Mode */
+            --card-bg-color: var(--st-bgs2); /* Fundo do card no Dark Mode (geralmente mais escuro) */
         }}
+    }}
+
+    /* ------------------------------------------------------------------- */
+    /* 1. Animação de Boas-vindas */
+    /* ------------------------------------------------------------------- */
+    @keyframes fadeIn {{
+        from {{ opacity: 0; transform: translateY(-10px); }}
+        to {{ opacity: 1; transform: translateY(0); }}
+    }}
+    .welcome-message {{
+        font-family: 'League Spartan', sans-serif;
+        font-size: 2.2rem;
+        font-weight: 700;
+        color: var(--caec-azul);
+        text-align: center;
+        margin-bottom: 2rem;
+        animation: fadeIn 1.5s ease-out;
     }}
     
     /* ------------------------------------------------------------------- */
-    /* 1. Glassmorphism na Sidebar */
-    /* ------------------------------------------------------------------- */
-
-    /* Seletores para o contêiner principal da sidebar */
-    .st-emotion-cache-vk34a3, .st-emotion-cache-1cypk8n, .st-emotion-cache-1d371w8 {{ 
-        background-color: var(--sidebar-bg-transparent) !important; 
-        backdrop-filter: blur(12px) saturate(180%); 
-        -webkit-backdrop-filter: blur(12px) saturate(180%);
-        border-right: 1px solid var(--sidebar-border) !important; 
-    }}
-
-    /* Garante que o texto da sidebar use a cor de fonte padrão do tema */
-    .st-emotion-cache-1cypk8n *, .st-emotion-cache-1d371w8 * {{
-        color: var(--st-font-color) !important; 
-        font-family: 'Open Sans', sans-serif; 
-    }}
-
-    /* ------------------------------------------------------------------- */
-    /* 2. Aplicação de Estilos Gerais, Blueprint e Tipografia */
+    /* 2. Aplicação de Estilos Gerais e Blueprint */
     /* ------------------------------------------------------------------- */
 
     .stApp {{
@@ -115,73 +112,103 @@ def get_dynamic_css() -> str:
       font-family: 'Open Sans', sans-serif; 
       {BLUEPRINT_BACKGROUND_CSS} 
     }}
-
+    
     /* CORRIGIDO: Título H1 com cor dinâmica (preto/branco) */
     h1 {{ 
         margin-top: 0rem; 
         margin-bottom: 1rem; 
         color: var(--h1-color) !important;
+        font-size: 2.5rem; /* Ajuste para melhor visualização */
     }}
     
-    /* Títulos e KPI Value */
-    h2, h3, h4, .st-emotion-cache-e67m5x, .kpi-value {{ 
-        font-family: 'Anton', 'Six Caps', 'League-Spartan', sans-serif;
+    /* Títulos H2 e H3 */
+    h2, h3, h4 {{ 
+        font-family: 'Anton', 'League Spartan', sans-serif;
+        color: var(--st-font-color) !important;
     }}
     
     /* ------------------------------------------------------------------- */
-    /* 3. Estilos de CARD para Gráficos e Tabelas (FUNDO e BORDAS ARREDONDADAS) */
+    /* 3. Estilos de CARD para Gráficos e Tabelas (FUNDO SÓLIDO E BORDAS ARREDONDADAS) */
     /* ------------------------------------------------------------------- */
 
     /* Seletores para os containers de COLUMNS, TABS e CONTAINER (que encapsulam os gráficos/tabelas) */
-    .st-emotion-cache-1v4f50, .st-emotion-cache-1n743z1, .st-emotion-cache-1d9g9l8, .st-emotion-cache-0 {{
-        background: var(--st-bgs2); 
+    /* Reforçado o seletor para garantir que o fundo seja aplicado */
+    .st-emotion-cache-1v4f50, .st-emotion-cache-1n743z1, .st-emotion-cache-1d9g9l8, .st-emotion-cache-0, .st-emotion-cache-zt5igz {{
+        background: var(--card-bg-color); /* Usando a variável definida */
         border: 1px solid var(--st-bgs3);
-        border-radius: 12px; /* Aumentado o raio para arredondar mais */
+        border-radius: 12px; 
         padding: var(--card-padding); 
         margin-bottom: 1.5rem; 
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15); /* Sombra mais forte para destacar */
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15); 
         transition: all 0.2s ease-in-out;
     }}
+
+    /* Remove estilos de card para elementos aninhados para evitar duplicação */
+    .st-emotion-cache-1d9g9l8 .st-emotion-cache-1d9g9l8, 
+    .st-emotion-cache-0 .st-emotion-cache-0,
+    .st-emotion-cache-1v4f50 .st-emotion-cache-1v4f50, 
+    .st-emotion-cache-1n743z1 .st-emotion-cache-1n743z1 {{
+        background: transparent;
+        border: none;
+        padding: 0;
+        margin-bottom: 0;
+        box-shadow: none;
+    }}
     
-    /* Regras para limpar cards aninhados e garantir a harmonia */
-    .st-emotion-cache-1d9g9l8 .st-emotion-cache-1d9g9l8, .st-emotion-cache-0 .st-emotion-cache-0,
-    .st-emotion-cache-1v4f50 .st-emotion-cache-1v4f50, .st-emotion-cache-1n743z1 .st-emotion-cache-1n743z1 {{
-        background: transparent;
-        border: none;
-        padding: 0;
-        margin-bottom: 0;
-        box-shadow: none;
-    }}
-
-    /* Ajustar o container que envolve os KPIs, removendo o estilo de card nele (para não ficar aninhado) */
-    .st-emotion-cache-1d9g9l8:has(.kpi-card) {{
-        background: transparent;
-        border: none;
-        padding: 0;
-        margin-bottom: 0;
-        box-shadow: none;
-    }}
-
     /* CORRIGIDO: Fundo dos Gráficos (Plotly) */
-    /* Define um fundo SÓLIDO para a área de plotagem, usando a cor secundária do tema */
+    /* Garante que a área de plotagem do Plotly seja transparente para que o fundo do Card prevaleça */
     .modebar, .plotly, .js-plotly-plot, .plotly-container {{
-      background-color: var(--st-bgs2) !important;
-      border-radius: 10px; /* Arredonda o fundo do gráfico */
+      background-color: transparent !important;
+      border-radius: 10px; 
     }}
     .js-plotly-plot {{ 
         overflow: hidden; 
     }}
 
     /* ------------------------------------------------------------------- */
-    /* 4. Estilos de KPI (MANTIDOS COM CORREÇÃO DE COR) */
+    /* 4. Responsividade Mobile / Tipografia em Telas Pequenas */
     /* ------------------------------------------------------------------- */
+
+    @media (max-width: 600px) {{
+        .st-emotion-cache-1v4f50, .st-emotion-cache-1n743z1, .st-emotion-cache-1d9g9l8, .st-emotion-cache-0, .st-emotion-cache-zt5igz {{
+             padding: 10px; /* Reduz padding em mobile */
+             margin-bottom: 1rem;
+        }}
+        h1 {{ font-size: 1.8rem; }}
+        h2, h3, h4 {{ font-size: 1.3rem; }}
+        .kpi-value {{ font-size: 20px !important; }}
+        .kpi-card {{ height: 100px; padding: 10px 12px; }}
+        .kpi-label, .kpi-delta {{ font-size: 11px; }}
+        .welcome-message {{ font-size: 1.5rem; }}
+
+        /* Quebra o fluxo dos gráficos horizontais para vertical em telas pequenas */
+        .st-emotion-cache-1r6ftg6 {{ /* seletor para columns container */
+            display: block !important;
+        }}
+        .st-emotion-cache-1d3x7py {{ /* seletor para colunas individuais */
+            width: 100% !important;
+            margin-right: 0 !important;
+            margin-bottom: 1.5rem;
+        }}
+    }}
+    
+    /* ------------------------------------------------------------------- */
+    /* 5. Estilos de KPI e Sidebar (MANTIDOS) */
+    /* ------------------------------------------------------------------- */
+    
+    .st-emotion-cache-vk34a3, .st-emotion-cache-1cypk8n, .st-emotion-cache-1d371w8 {{ 
+        background-color: var(--sidebar-bg-transparent) !important; 
+        backdrop-filter: blur(12px) saturate(180%); 
+        -webkit-backdrop-filter: blur(12px) saturate(180%);
+        border-right: 1px solid var(--sidebar-border) !important; 
+    }}
 
     .kpi-card {{
       background: var(--st-bgs2); 
       border: 1px solid var(--st-bgs3);
-      border-radius: 12px; /* Borda arredondada também no KPI */
+      border-radius: 12px; 
       padding: 12px 14px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Sombra suave */
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); 
       width: 100%;
       height: 120px; 
       display: flex; 
@@ -189,16 +216,11 @@ def get_dynamic_css() -> str:
       justify-content: space-between; 
       overflow: hidden; 
     }}
-    .kpi-label, .kpi-delta {{ 
-        color: var(--st-font-color-weak); 
-        font-size: 13px;
-    }}
     .kpi-value {{ 
         font-size: 26px; 
         font-weight:700; 
     }}
 
-    /* Footer */
     footer {{ color: var(--st-font-color-weak); text-align:center; padding-top:10px; }}
     """
     return f"<style>{css_vars}</style>"
@@ -302,7 +324,7 @@ def preprocess_df(df_raw: pd.DataFrame) -> pd.DataFrame:
 def load_and_preprocess_data() -> Tuple[pd.DataFrame, bool]:
     client = get_gspread_client()
     if not client:
-        # Mock data
+        # Mock data (mantido para testes)
         mock_data = {
             "DATA": [datetime.now() - timedelta(days=d) for d in range(60)] * 2,
             "TIPO": ["Receita"] * 60 + ["Despesa"] * 60,
@@ -332,11 +354,11 @@ def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
         f = f[f["CATEGORIA"].isin(cats)]
     return f.reset_index(drop=True)
 
-# -------------------- PLOTS (AJUSTADOS) --------------------
+# -------------------- PLOTS (MANTIDOS) --------------------
 
 def _get_empty_fig(text: str = "Sem dados") -> go.Figure:
     fig = go.Figure()
-    # Garante que o fundo do Plotly seja transparente para que o fundo do card CSS funcione
+    # Fundo transparente para herdar do Card/Container
     fig.add_annotation(text=text, xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False, font=dict(color="var(--st-font-color-weak)"))
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=DEFAULT_CHART_HEIGHT)
     return fig
@@ -356,7 +378,6 @@ def plot_saldo_acumulado(df: pd.DataFrame) -> go.Figure:
         y_pred = reg.predict(X_line)
         dates_line = [datetime.fromordinal(int(x)) for x in X_line.flatten()]
         fig.add_trace(go.Scatter(x=dates_line, y=y_pred, mode="lines", name="Tendência", line=dict(color=COLORS["trend"], dash="dash")))
-    # Fundo transparente para herdar do card
     fig.update_layout(height=DEFAULT_CHART_HEIGHT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     fig.update_xaxes(title_text="Data")
     fig.update_yaxes(title_text="Saldo (R$)")
@@ -368,7 +389,6 @@ def plot_fluxo_diario(df: pd.DataFrame) -> go.Figure:
     fluxo["DATA"] = pd.to_datetime(fluxo["DATA"])
     cores = [COLORS["receita"] if v >= 0 else COLORS["despesa"] for v in fluxo["VALOR_NUM"]]
     fig = go.Figure(go.Bar(x=fluxo["DATA"], y=fluxo["VALOR_NUM"], marker_color=cores))
-    # Fundo transparente para herdar do card
     fig.update_layout(height=DEFAULT_CHART_HEIGHT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     fig.update_xaxes(title_text="Data")
     fig.update_yaxes(title_text="Valor (R$)")
@@ -382,7 +402,6 @@ def plot_categoria_barras(df: pd.DataFrame, kind: str = "Receita", category_colo
     cats, vals = list(series.index), series.values
     marker_colors = [category_colors.get(c, COLORS["neutral"]) for c in cats]
     fig = go.Figure(go.Bar(x=vals, y=cats, orientation='h', marker=dict(color=marker_colors)))
-    # Fundo transparente para herdar do card
     fig.update_layout(height=DEFAULT_CHART_HEIGHT-10, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                       title=f'{kind} por Categoria (Barras)') 
     fig.update_xaxes(title_text="Valor (R$)")
@@ -390,7 +409,7 @@ def plot_categoria_barras(df: pd.DataFrame, kind: str = "Receita", category_colo
     return fig
 
 def plot_categoria_barras_pct(df: pd.DataFrame, kind: str = "Receita", category_colors: Dict[str,str]=None) -> go.Figure:
-    """NOVO: Gráfico de barras verticais com porcentagem de composição."""
+    """Gráfico de barras verticais com porcentagem de composição (substitui Treemap)."""
     assert kind in ("Receita", "Despesa")
     base = df[df["VALOR_NUM"] > 0] if kind == "Receita" else df[df["VALOR_NUM"] < 0]
     if base.empty: return _get_empty_fig(f"Sem dados de {kind}")
@@ -401,7 +420,6 @@ def plot_categoria_barras_pct(df: pd.DataFrame, kind: str = "Receita", category_
     df_plot["PERCENT"] = (df_plot["VALOR"] / total) * 100
     df_plot = df_plot.sort_values("PERCENT", ascending=False)
     
-    # Formatação do hover text
     df_plot["HOVER_TEXT"] = df_plot.apply(
         lambda row: f"**{row['CATEGORIA']}**<br>Valor: {money_fmt_br(row['VALOR'])}<br>% Total: {row['PERCENT']:.1f}%", axis=1
     )
@@ -426,8 +444,6 @@ def plot_categoria_barras_pct(df: pd.DataFrame, kind: str = "Receita", category_
     fig.update_xaxes(title_text="Categoria")
     fig.update_yaxes(title_text="Porcentagem (%)", ticksuffix="%")
     return fig
-
-# Removemos a função plot_treemap_composicao
 
 def plot_bubble_transacoes_categoria_y(df: pd.DataFrame, category_colors: Dict[str,str]=None) -> go.Figure:
     if df.empty: return _get_empty_fig("Sem transações")
@@ -457,6 +473,21 @@ def plot_bubble_transacoes_valor_y(df: pd.DataFrame, category_colors: Dict[str,s
     fig.update_yaxes(title_text="Valor (R$)")
     return fig
 
+def plot_candlestick(df: pd.DataFrame, freq: str = "D") -> go.Figure:
+    ohlc = prepare_ohlc_period(df, freq)
+    if ohlc.empty: return _get_empty_fig("Sem dados para candlestick")
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.04, row_heights=[0.72, 0.28])
+    fig.add_trace(go.Candlestick(x=ohlc["ts"], open=ohlc["open"], high=ohlc["high"], low=ohlc["low"], close=ohlc["close"],
+                                 increasing_line_color=COLORS["receita"], decreasing_line_color=COLORS["despesa"]), row=1, col=1)
+    fig.add_trace(go.Bar(x=ohlc["ts"], y=ohlc["volume"], name="Volume", marker_color=COLORS["neutral"]), row=2, col=1)
+    ohlc["sma7"] = ohlc["close"].rolling(window=7, min_periods=1).mean()
+    fig.add_trace(go.Scatter(x=ohlc["ts"], y=ohlc["sma7"], mode="lines", name="SMA7", line=dict(color=COLORS["trend"])), row=1, col=1)
+    fig.update_layout(height=DEFAULT_CHART_HEIGHT+80, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis_rangeslider_visible=False)
+    fig.update_xaxes(title_text="Período", row=2, col=1)
+    fig.update_yaxes(title_text="Valor (R$)", row=1, col=1)
+    fig.update_yaxes(title_text="Volume", row=2, col=1)
+    return fig
+
 def prepare_ohlc_period(df: pd.DataFrame, freq: str = "D") -> pd.DataFrame:
     if df.empty: return pd.DataFrame()
     period = df["DATA"].dt.to_period(freq)
@@ -474,35 +505,6 @@ def prepare_ohlc_period(df: pd.DataFrame, freq: str = "D") -> pd.DataFrame:
     ohlc = pd.DataFrame(groups).sort_values("ts").reset_index(drop=True)
     return ohlc
 
-def plot_candlestick(df: pd.DataFrame, freq: str = "D") -> go.Figure:
-    ohlc = prepare_ohlc_period(df, freq)
-    if ohlc.empty: return _get_empty_fig("Sem dados para candlestick")
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.04, row_heights=[0.72, 0.28])
-    fig.add_trace(go.Candlestick(x=ohlc["ts"], open=ohlc["open"], high=ohlc["high"], low=ohlc["low"], close=ohlc["close"],
-                                 increasing_line_color=COLORS["receita"], decreasing_line_color=COLORS["despesa"]), row=1, col=1)
-    fig.add_trace(go.Bar(x=ohlc["ts"], y=ohlc["volume"], name="Volume", marker_color=COLORS["neutral"]), row=2, col=1)
-    ohlc["sma7"] = ohlc["close"].rolling(window=7, min_periods=1).mean()
-    fig.add_trace(go.Scatter(x=ohlc["ts"], y=ohlc["sma7"], mode="lines", name="SMA7", line=dict(color=COLORS["trend"])), row=1, col=1)
-    fig.update_layout(height=DEFAULT_CHART_HEIGHT+80, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis_rangeslider_visible=False)
-    fig.update_xaxes(title_text="Período", row=2, col=1)
-    fig.update_yaxes(title_text="Valor (R$)", row=1, col=1)
-    fig.update_yaxes(title_text="Volume", row=2, col=1)
-    return fig
-
-def plot_monthly_heatmap(df: pd.DataFrame) -> go.Figure:
-    if df.empty: return _get_empty_fig()
-    dfh = df.copy()
-    dfh['day'] = dfh['DATA'].dt.day
-    dfh['ym'] = dfh['DATA'].dt.to_period('M').astype(str)
-    pivot = dfh.groupby(['ym','day'])['VALOR_NUM'].sum().reset_index()
-    heat = pivot.pivot(index='ym', columns='day', values='VALOR_NUM').fillna(0)
-    fig = go.Figure(data=go.Heatmap(z=heat.values, x=heat.columns, y=heat.index, colorscale='RdBu', reversescale=True,
-                                    hovertemplate="Mês: %{y}<br>Dia: %{x}<br>Saldo Diário: %{z:.2f} R$<extra></extra>"))
-    fig.update_layout(title='Heatmap Mensal de Saldo Diário', height=DEFAULT_CHART_HEIGHT+40, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-    fig.update_xaxes(title_text="Dia do Mês")
-    fig.update_yaxes(title_text="Mês")
-    return fig
-
 def plot_boxplot_by_category(df: pd.DataFrame) -> go.Figure:
     if df.empty: return _get_empty_fig()
     dfp = df.copy()
@@ -512,50 +514,7 @@ def plot_boxplot_by_category(df: pd.DataFrame) -> go.Figure:
     fig.update_xaxes(tickangle=-45)
     return fig
 
-# -------------------- SIDEBAR E FILTROS (MANTIDOS) --------------------
-
-def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
-    st.sidebar.title("Dashboard Financeiro Caec")
-    st.sidebar.markdown("---")
-    page = st.sidebar.selectbox("Altere a visualização", options=["Resumo Financeiro", "Dashboard Detalhado"], key="sb_page")
-    toggle_multi = st.sidebar.checkbox("Ativar filtro avançado (múltipla seleção e período)", value=False, key="sb_toggle_multi")
-    min_ts = df["DATA"].min() if not df.empty else pd.Timestamp(datetime.today() - timedelta(days=365))
-    max_ts = df["DATA"].max() if not df.empty else pd.Timestamp(datetime.today())
-    min_d = min_ts.date()
-    max_d = max_ts.date()
-    filters: Dict = {"mode": "month", "month": "Todos", "categories": []}
-    if toggle_multi:
-        with st.sidebar.expander("Filtros Avançados", expanded=True):
-            categories = sorted(df["CATEGORIA"].unique()) if not df.empty else []
-            categories = [c for c in categories if c != ""]
-            selected_cats = st.multiselect("Categorias (múltiplas)", options=categories, default=categories if categories else [], key="sb_cat_multi")
-            slider_val = st.slider("Período (arraste)", min_value=min_d, max_value=max_d, value=(min_d, max_d), format="YYYY-MM-DD", step=timedelta(days=1), key="sb_date_slider")
-            date_from = pd.to_datetime(slider_val[0])
-            date_to = pd.to_datetime(slider_val[1]) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
-            filters["mode"] = "range"
-            filters["date_from"] = date_from
-            filters["date_to"] = date_to
-            filters["categories"] = selected_cats
-    else:
-        st.sidebar.markdown("### Filtro Rápido")
-        months = ["Todos"] + sorted(df["year_month"].unique(), reverse=True) if not df.empty else ["Todos"]
-        selected_month = st.sidebar.selectbox("Mês (ano-mês)", months, key="sb_month")
-        categories = ["Todos"] + sorted(df["CATEGORIA"].unique()) if not df.empty else ["Todos"]
-        categories = [c for c in categories if c != ""]
-        selected_category = st.sidebar.selectbox("Categoria", categories, key="sb_cat_single")
-        filters["mode"] = "month"
-        filters["month"] = selected_month
-        filters["categories"] = [selected_category] if selected_category != "Todos" else []
-    st.sidebar.markdown("---")
-    if st.sidebar.button("Limpar cache de dados", key="sb_clear_cache"):
-        st.cache_data.clear()
-        st.cache_resource.clear()
-        st.sidebar.success("Cache limpo! Recarregue a página.")
-    st.sidebar.markdown("---")
-    st.sidebar.caption("Criado e administrado pela diretoria de Administração Comercial e Financeiro — by Rick")
-    return page, filters
-
-# -------------------- KPIS (MANTIDOS) --------------------
+# -------------------- KPIS, TABELA E FILTROS (MANTIDOS) --------------------
 
 def _sum_period(df: pd.DataFrame, start_dt: datetime, end_dt: datetime, tipo: str = "all") -> float:
     if df.empty: return 0.0
@@ -646,8 +605,6 @@ def render_kpi_cards(df_full: pd.DataFrame, df_filtered: pd.DataFrame):
             delta_color=color_saldo
         )
 
-# -------------------- TABELA / EXPORT (MANTIDOS) --------------------
-
 def render_table(df: pd.DataFrame, key: str):
     if df.empty:
         st.info("Sem lançamentos para mostrar com os filtros atuais.")
@@ -662,29 +619,68 @@ def _prepare_export_csv(df: pd.DataFrame) -> str:
     export_df = df[["DATA","TIPO","CATEGORIA","DESCRIÇÃO","VALOR","OBSERVAÇÃO"]]
     return export_df.to_csv(index=False, encoding="utf-8-sig")
 
+def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
+    st.sidebar.title("Dashboard Financeiro Caec")
+    st.sidebar.markdown("---")
+    page = st.sidebar.selectbox("Altere a visualização", options=["Resumo Financeiro", "Dashboard Detalhado"], key="sb_page")
+    toggle_multi = st.sidebar.checkbox("Ativar filtro avançado (múltipla seleção e período)", value=False, key="sb_toggle_multi")
+    min_ts = df["DATA"].min() if not df.empty else pd.Timestamp(datetime.today() - timedelta(days=365))
+    max_ts = df["DATA"].max() if not df.empty else pd.Timestamp(datetime.today())
+    min_d = min_ts.date()
+    max_d = max_ts.date()
+    filters: Dict = {"mode": "month", "month": "Todos", "categories": []}
+    if toggle_multi:
+        with st.sidebar.expander("Filtros Avançados", expanded=True):
+            categories = sorted(df["CATEGORIA"].unique()) if not df.empty else []
+            categories = [c for c in categories if c != ""]
+            selected_cats = st.multiselect("Categorias (múltiplas)", options=categories, default=categories if categories else [], key="sb_cat_multi")
+            slider_val = st.slider("Período (arraste)", min_value=min_d, max_value=max_d, value=(min_d, max_d), format="YYYY-MM-DD", step=timedelta(days=1), key="sb_date_slider")
+            date_from = pd.to_datetime(slider_val[0])
+            date_to = pd.to_datetime(slider_val[1]) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+            filters["mode"] = "range"
+            filters["date_from"] = date_from
+            filters["date_to"] = date_to
+            filters["categories"] = selected_cats
+    else:
+        st.sidebar.markdown("### Filtro Rápido")
+        months = ["Todos"] + sorted(df["year_month"].unique(), reverse=True) if not df.empty else ["Todos"]
+        selected_month = st.sidebar.selectbox("Mês (ano-mês)", months, key="sb_month")
+        categories = ["Todos"] + sorted(df["CATEGORIA"].unique()) if not df.empty else ["Todos"]
+        categories = [c for c in categories if c != ""]
+        selected_category = st.sidebar.selectbox("Categoria", categories, key="sb_cat_single")
+        filters["mode"] = "month"
+        filters["month"] = selected_month
+        filters["categories"] = [selected_category] if selected_category != "Todos" else []
+    st.sidebar.markdown("---")
+    if st.sidebar.button("Limpar cache de dados", key="sb_clear_cache"):
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        st.sidebar.success("Cache limpo! Recarregue a página.")
+    st.sidebar.markdown("---")
+    st.sidebar.caption("Criado e administrado pela diretoria de Administração Comercial e Financeiro — by Rick")
+    return page, filters
 
 # -------------------- MAIN FUNCTION --------------------
 
 def main():
-    # CORRIGIDO: Injeção de CSS no topo
+    # Injeção de CSS no topo
     st.markdown(get_dynamic_css(), unsafe_allow_html=True)
     
-    st.title("Dashboard Financeiro Caec")
+    # Animação de Boas-vindas (mostra o texto apenas uma vez no início)
+    if 'welcome_shown' not in st.session_state:
+        st.markdown('<div class="welcome-message">Bem-vindo ao Centro Administrativo do Caec</div>', unsafe_allow_html=True)
+        st.session_state['welcome_shown'] = True
+    else:
+        # Se já foi exibido, mostra o título principal
+        st.title("Dashboard Financeiro Caec")
 
     try:
         df_full, header_mismatch = load_and_preprocess_data()
     except Exception as e:
-        # Mock data se a importação falhar
-        mock_data = {
-            "DATA": [datetime.now() - timedelta(days=d) for d in range(60)] * 2,
-            "TIPO": ["Receita"] * 60 + ["Despesa"] * 60,
-            "CATEGORIA": ["Mensalidade", "Marketing", "Evento", "Aluguel", "NÃO CATEGORIZADO"] * 24,
-            "DESCRIÇÃO": [f"Item {i}" for i in range(120)],
-            "VALOR": [f"{1000 * (1 if i % 2 == 0 else -1)}" for i in range(120)],
-            "OBSERVAÇÃO": ["N/D"] * 120,
-        }
-        df_full = preprocess_df(pd.DataFrame(mock_data))
-        header_mismatch = False
+        st.sidebar.markdown("---")
+        st.sidebar.caption("CAEC © 2025")
+        st.error(f"Erro ao carregar dados: {e}")
+        return
     
     if df_full.empty:
         st.sidebar.markdown("---")
@@ -723,12 +719,12 @@ def main():
 
 
     else:
-        # Garante que o container de tabs use o estilo de card
+        # Garante que o container de tabs use o estilo de card (já resolvido pelo seletor CSS)
         tab_normais, tab_avancados, tab_tabela = st.tabs(["📊 Gráficos Principais", "📈 Análise Avançada", "📋 Tabela Completa"])
         
         with tab_normais:
             
-            # CARD 1.1 e 1.2: Barras de Valores (Mantidas)
+            # CARD 1.1 e 1.2: Barras de Valores
             with st.container():
                 st.markdown("### 💰 Composição Financeira por Categoria (Valores Absolutos)")
                 col1, col2 = st.columns(2)
@@ -783,11 +779,6 @@ def main():
                 with st.container():
                     st.subheader("Distribuição de Valores por Categoria (Boxplot)")
                     st.plotly_chart(plot_boxplot_by_category(df_filtered), use_container_width=True, config={'displayModeBar': False}, key="chart_box_avancado")
-
-            # CARD 3: Heatmap
-            with st.container():
-                st.subheader("Heatmap de Saldo Diário")
-                st.plotly_chart(plot_monthly_heatmap(df_filtered), use_container_width=True, config={'displayModeBar': False}, key="chart_heatmap_avancado")
 
         with tab_tabela:
             # CARD 4: Tabela Completa
