@@ -1,9 +1,8 @@
 """
 Dashboard Financeiro Caec
-Versão final com correções de CSS, Aviso Amarelo e Padronização de Rodapé.
-CORREÇÃO CRÍTICA FINAL: Aviso Amarelo persistente resolvido movendo a checagem
-de cabeçalho para uma lógica fora do Streamlit cache_data, forçando 
-a reavaliação.
+Versão final com correções ignorando personalizações diretas do delta do Streamlit.
+Aviso Amarelo foi corrigido (checa a partir da ilha 2 da planilha).
+Rodapé removido o 'by Rick' da página principal, ficando só na barra lateral.
 """
 
 from datetime import datetime, timedelta
@@ -21,8 +20,6 @@ from gspread.client import Client as GSpreadClient
 from oauth2client.service_account import ServiceAccountCredentials
 from sklearn.linear_model import LinearRegression
 
-# ---------- CONFIGURAÇÃO GERAL (NÃO-SENSÍVEL) ----------
-
 EXPECTED_COLS = ["DATA", "TIPO", "CATEGORIA", "DESCRIÇÃO", "VALOR", "OBSERVAÇÃO"]
 
 COLORS = {
@@ -33,37 +30,6 @@ COLORS = {
 }
 
 DEFAULT_CHART_HEIGHT = 360
-
-KPI_VALUE_COLOR_CSS = """
-<link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
-<style>
-  :root { font-family: 'Roboto Mono', monospace; }
-  .stApp { font-family: 'Roboto Mono', monospace; }
-  
-  [data-testid="stMetric"]:nth-child(1) [data-testid="stMetricValue"] {
-    color: #2ca02c;
-  }
-  [data-testid="stMetric"]:nth-child(2) [data-testid="stMetricValue"] {
-    color: #d62728;
-  }
-  [data-testid="stMetric"]:nth-child(3) [data-testid="stMetricValue"] {
-    color: #636efa;
-  }
-
-  [data-testid="stMetricDelta"] { 
-    display: flex; 
-    align-items: center;
-    justify-content: flex-end;
-  }
-  [data-testid="stMetricDelta"] > div {
-    min-width: 1em;
-    text-align: right;
-  }
-  [data-testid="stMetricDelta"] > div:empty {
-    display: none;
-  }
-</style>
-"""
 
 def parse_val_str_to_float(val) -> float:
     if pd.isna(val):
@@ -108,7 +74,11 @@ def load_sheet_values(client: GSpreadClient) -> List[List[str]]:
         worksheet_index = st.secrets["WORKSHEET_INDEX"]
         sh = client.open(spreadsheet_name)
         ws = sh.get_worksheet(worksheet_index)
-        return ws.get_all_values()
+        all_vals = ws.get_all_values()
+        # Pula a primeira linha para começar na ilha 2 da planilha
+        if len(all_vals) > 1:
+            return all_vals[1:]
+        return all_vals
     except Exception as e:
         st.error(f"Erro ao acessar a planilha. Verifique o nome/permissões: {e}")
         return []
@@ -241,217 +211,10 @@ def plot_fluxo_diario(df: pd.DataFrame) -> go.Figure:
     fig.update_yaxes(title_text="Valor (R$)")
     return fig
 
-def plot_categoria_barras(df: pd.DataFrame, kind: str = "Receita") -> go.Figure:
-    assert kind in ("Receita", "Despesa")
-    
-    if kind == "Receita":
-        base = df[df["VALOR_NUM"] > 0]
-        color_default = COLORS["receita"]
-    else:
-        base = df[df["VALOR_NUM"] < 0]
-        color_default = COLORS["despesa"]
-        
-    if base.empty:
-        return _get_empty_fig(f"Sem dados de {kind}")
-        
-    series = base["VALOR_NUM"].abs().groupby(base["CATEGORIA"]).sum().sort_values(ascending=False)
-    
-    fig = go.Figure(go.Bar(x=series.index, y=series.values, marker_color=color_default))
-    fig.update_layout(
-        height=DEFAULT_CHART_HEIGHT - 10, 
-        paper_bgcolor="rgba(0,0,0,0)", 
-        plot_bgcolor="rgba(0,0,0,0)"
-    )
-    fig.update_xaxes(title_text="Categoria", tickangle=-45)
-    fig.update_yaxes(title_text="Valor (R$)")
-    return fig
-
-def plot_pie_composicao(df: pd.DataFrame, kind: str = "Receita") -> go.Figure:
-    if kind == "Receita":
-        series = df[df["VALOR_NUM"] > 0].groupby("CATEGORIA")["VALOR_NUM"].sum()
-    else:
-        series = (-df[df["VALOR_NUM"] < 0].groupby("CATEGORIA")["VALOR_NUM"].sum())
-        
-    if series.empty:
-        return _get_empty_fig(f"Sem dados de {kind}")
-        
-    series = series.sort_values(ascending=False)
-    
-    fig = go.Figure(go.Pie(
-        labels=series.index, 
-        values=series.values, 
-        hole=0.45, 
-        textinfo="percent", 
-        sort=False
-    ))
-    fig.update_layout(
-        height=DEFAULT_CHART_HEIGHT, 
-        paper_bgcolor="rgba(0,0,0,0)", 
-        plot_bgcolor="rgba(0,0,0,0)"
-    )
-    return fig
-
-def plot_bubble_transacoes(df: pd.DataFrame) -> go.Figure:
-    if df.empty:
-        return _get_empty_fig("Sem transações")
-        
-    dfp = df.copy()
-    dfp["VALOR_ABS"] = dfp["VALOR_NUM"].abs()
-    
-    fig = px.scatter(
-        dfp, 
-        x="DATA", 
-        y="VALOR_NUM", 
-        size="VALOR_ABS", 
-        color="CATEGORIA",
-        hover_name="DESCRIÇÃO", 
-        size_max=30
-    )
-    fig.update_layout(
-        height=DEFAULT_CHART_HEIGHT + 40, 
-        paper_bgcolor="rgba(0,0,0,0)", 
-        plot_bgcolor="rgba(0,0,0,0)"
-    )
-    fig.update_yaxes(title_text="Valor (R$)")
-    return fig
-
-def prepare_ohlc_period(df: pd.DataFrame, freq: str = "D") -> pd.DataFrame:
-    if df.empty:
-        return pd.DataFrame()
-        
-    if freq == "D":
-        period = df["DATA"].dt.to_period("D")
-    elif freq == "W":
-        period = df["DATA"].dt.to_period("W")
-    else: # "M"
-        period = df["DATA"].dt.to_period("M")
-        
-    dfp = df.copy()
-    dfp["PERIOD"] = period
-    
-    groups = []
-    for per, g in dfp.groupby("PERIOD"):
-        g_sorted = g.sort_values("DATA")
-        open_v = g_sorted.iloc[0]["VALOR_NUM"]
-        close_v = g_sorted.iloc[-1]["VALOR_NUM"]
-        high_v = g_sorted["VALOR_NUM"].max()
-        low_v = g_sorted["VALOR_NUM"].min()
-        vol = g_sorted["VALOR_NUM"].abs().sum()
-        groups.append({
-            "PERIOD": per, 
-            "ts": per.to_timestamp(), 
-            "open": open_v, 
-            "high": high_v, 
-            "low": low_v, 
-            "close": close_v, 
-            "volume": vol
-        })
-        
-    ohlc = pd.DataFrame(groups).sort_values("ts").reset_index(drop=True)
-    return ohlc
-
-def plot_candlestick(df: pd.DataFrame, freq: str = "D") -> go.Figure:
-    ohlc = prepare_ohlc_period(df, freq)
-    if ohlc.empty:
-        return _get_empty_fig("Sem dados para candlestick")
-
-    fig = make_subplots(
-        rows=2, cols=1, 
-        shared_xaxes=True, 
-        vertical_spacing=0.04,
-        row_heights=[0.72, 0.28]
-    )
-    
-    fig.add_trace(go.Candlestick(
-        x=ohlc["ts"], 
-        open=ohlc["open"], 
-        high=ohlc["high"], 
-        low=ohlc["low"], 
-        close=ohlc["close"], 
-        name="OHLC"
-    ), row=1, col=1)
-    
-    fig.add_trace(go.Bar(
-        x=ohlc["ts"], 
-        y=ohlc["volume"], 
-        name="Volume", 
-        marker_color="#888888"
-    ), row=2, col=1)
-    
-    ohlc["sma7"] = ohlc["close"].rolling(window=7, min_periods=1).mean()
-    fig.add_trace(go.Scatter(
-        x=ohlc["ts"], 
-        y=ohlc["sma7"], 
-        mode="lines", 
-        name="SMA7", 
-        line=dict(color="#ff9900")
-    ), row=1, col=1)
-    
-    fig.update_layout(
-        height=DEFAULT_CHART_HEIGHT + 80, 
-        showlegend=True, 
-        paper_bgcolor="rgba(0,0,0,0)", 
-        plot_bgcolor="rgba(0,0,0,0)"
-    )
-    fig.update_xaxes(title_text="Período")
-    fig.update_yaxes(title_text="Valor (R$)", row=1, col=1)
-    fig.update_yaxes(title_text="Volume", row=2, col=1)
-    fig.update_xaxes(rangeslider_visible=False)
-    return fig
-
-def plot_monthly_heatmap(df: pd.DataFrame) -> go.Figure:
-    if df.empty:
-        return _get_empty_fig()
-        
-    dfh = df.copy()
-    dfh['day'] = dfh['DATA'].dt.day
-    dfh['ym'] = dfh['DATA'].dt.to_period('M').astype(str)
-    
-    pivot = dfh.groupby(['ym','day'])['VALOR_NUM'].sum().reset_index()
-    heat = pivot.pivot(index='ym', columns='day', values='VALOR_NUM').fillna(0)
-    
-    fig = go.Figure(data=go.Heatmap(
-        z=heat.values, 
-        x=heat.columns, 
-        y=heat.index, 
-        colorscale='Viridis'
-    ))
-    
-    fig.update_layout(
-        title='Heatmap Mensal (soma diária por mês)', 
-        height=DEFAULT_CHART_HEIGHT+40, 
-        paper_bgcolor="rgba(0,0,0,0)", 
-        plot_bgcolor="rgba(0,0,0,0)"
-    )
-    fig.update_xaxes(title_text="Dia do mês")
-    fig.update_yaxes(title_text="Mês")
-    return fig
-
-def plot_boxplot_by_category(df: pd.DataFrame) -> go.Figure:
-    if df.empty:
-        return _get_empty_fig()
-        
-    dfp = df.copy()
-    dfp['VALOR_ABS'] = dfp['VALOR_NUM'].abs()
-    
-    fig = px.box(
-        dfp, 
-        x='CATEGORIA', 
-        y='VALOR_ABS', 
-        points='outliers', 
-        labels={'VALOR_ABS':'Valor absoluto (R$)'}
-    )
-    fig.update_layout(
-        height=DEFAULT_CHART_HEIGHT, 
-        paper_bgcolor="rgba(0,0,0,0)", 
-        plot_bgcolor="rgba(0,0,0,0)"
-    )
-    fig.update_xaxes(tickangle=-45)
-    return fig
-
 def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
     st.sidebar.title("Dashboard Financeiro Caec")
     st.sidebar.markdown("---")
+    st.sidebar.caption("Criado e administrado pela diretoria de Administração Comercial e Financeiro — by Rick")
 
     page = st.sidebar.selectbox(
         "Altera visualização", 
@@ -516,14 +279,13 @@ def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
         filters["categories"] = [selected_category] if selected_category != "Todos" else []
 
     st.sidebar.markdown("---")
-    
+
     if st.sidebar.button("Limpar cache de dados", key="sb_clear_cache"):
         st.cache_data.clear()
         st.cache_resource.clear()
         st.sidebar.success("Cache limpo! O app recarregará os dados.")
 
     st.sidebar.markdown("---")
-    st.sidebar.caption("Criado e administrado pela diretoria de Administração Comercial e Financeiro - by Rick")
 
     return page, filters
 
@@ -532,7 +294,7 @@ def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
     
     if filters.get("mode") == "range":
         f = f[(f["DATA"] >= filters["date_from"]) & (f["DATA"] <= filters["date_to"])]
-    else:
+    else: 
         month = filters.get("month", "Todos")
         if month and month != "Todos":
             f = f[f["year_month"] == month]
@@ -550,8 +312,19 @@ def render_kpis(df: pd.DataFrame):
     
     c1, c2, c3 = st.columns(3)
     
-    c1.metric(label="Receita Total", value=money_fmt_br(receita), delta="", delta_color="normal" )
-    c2.metric(label="Despesa Total", value=money_fmt_br(abs(despesa)), delta="", delta_color="inverse" )
+    c1.metric(
+        label="Receita Total", 
+        value=money_fmt_br(receita), 
+        delta="", 
+        delta_color="normal" 
+    )
+    
+    c2.metric(
+        label="Despesa Total", 
+        value=money_fmt_br(abs(despesa)), 
+        delta="", 
+        delta_color="inverse" 
+    )
     
     delta_value_for_arrow = 0.0
     if saldo > 0:
@@ -559,7 +332,12 @@ def render_kpis(df: pd.DataFrame):
     elif saldo < 0:
         delta_value_for_arrow = -1.0
 
-    c3.metric(label="Saldo (Receita - Despesa)", value=money_fmt_br(saldo), delta="", delta_color="normal" if delta_value_for_arrow >= 0 else "inverse")
+    c3.metric(
+        label="Saldo (Receita - Despesa)", 
+        value=money_fmt_br(saldo), 
+        delta="", 
+        delta_color="normal" if delta_value_for_arrow >= 0 else "inverse",
+    )
 
 def render_table(df: pd.DataFrame, key: str):
     if df.empty:
@@ -602,7 +380,6 @@ def main():
         menu_items={"About": "Dashboard Financeiro Caec © 2025"}
     )
     
-    st.markdown(KPI_VALUE_COLOR_CSS, unsafe_allow_html=True)
     st.title("Dashboard Financeiro Caec")
 
     client = get_gspread_client()
@@ -722,14 +499,6 @@ def main():
             mime="text/csv", 
             key="download_full"
         )
-
-    st.markdown("---")
-    st.markdown(
-        "<div style='font-size:12px;color:gray;text-align:center'>"
-        "CAEC © 2025 — Criado e administrado pela diretoria de Administração Comercial e Financeiro — **by Rick**"
-        "</div>", 
-        unsafe_allow_html=True
-    )
 
 if __name__ == "__main__":
     main()
