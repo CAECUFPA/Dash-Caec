@@ -35,7 +35,7 @@ INSTITUTIONAL = {
 COLORS = {
     "receita": "#2ca02c",  # verde (valor positivo)
     "despesa": "#d62728",  # vermelho (valor negativo)
-    "saldo": "#1f77b4",    # azul para saldo (visualmente distinto)
+    "saldo": "#1f77b4",    # azul para saldo
     "neutral": "#6c757d",
     "trend": INSTITUTIONAL["amarelo"]
 }
@@ -43,19 +43,20 @@ COLORS = {
 DEFAULT_CHART_HEIGHT = 360
 
 # CSS mínimo + textura SVG (treliça leve)
-BACKGROUND_SVG = """
-data:image/svg+xml;utf8,
-<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'>
-  <defs>
-    <pattern id='p' width='40' height='40' patternUnits='userSpaceOnUse'>
-      <path d='M0 20 L40 20 M20 0 L20 40' stroke='%23042251' stroke-opacity='0.04' stroke-width='1'/>
-      <path d='M0 0 L40 40 M40 0 L0 40' stroke='%23231f20' stroke-opacity='0.02' stroke-width='0.5'/>
-    </pattern>
-  </defs>
-  <rect width='200' height='200' fill='url(%23p)' />
-</svg>
-""".strip()
+BACKGROUND_SVG = (
+    "data:image/svg+xml;utf8,"
+    "<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'>"
+    "<defs>"
+    "<pattern id='p' width='40' height='40' patternUnits='userSpaceOnUse'>"
+    "<path d='M0 20 L40 20 M20 0 L20 40' stroke='%23042251' stroke-opacity='0.04' stroke-width='1'/>"
+    "<path d='M0 0 L40 40 M40 0 L0 40' stroke='%23231f20' stroke-opacity='0.02' stroke-width='0.5'/>"
+    "</pattern>"
+    "</defs>"
+    "<rect width='200' height='200' fill='url(%23p)' />"
+    "</svg>"
+)
 
+# Use f-string but escape literal braces by doubling them
 MINIMAL_CSS = f"""
 <style>
 :root {{
@@ -66,6 +67,7 @@ MINIMAL_CSS = f"""
   --kpi-font-size: 26px;
   --kpi-label-size: 13px;
 }}
+/* Aplica textura leve e esquema de cores */
 body .stApp {{
   background-image: url("{BACKGROUND_SVG}");
   background-repeat: repeat;
@@ -84,12 +86,15 @@ body .stApp {{
 .kpi-label {{ font-size: var(--kpi-label-size); color: #bfc9d3; margin-bottom:6px; }}
 .kpi-value {{ font-size: var(--kpi-font-size); font-weight:700; }}
 .kpi-delta {{ font-size:12px; color:#bfc9d3; margin-top:4px; display:flex; gap:8px; align-items:center; }}
-.kpi-arrow-up {{ color: %s; font-weight:700; }}
-.kpi-arrow-down {{ color: %s; font-weight:700; }}
+.kpi-arrow-up {{ color: {COLORS['receita']}; font-weight:700; }}
+.kpi-arrow-down {{ color: {COLORS['despesa']}; font-weight:700; }}
 /* Ajustes para os charts */
-.chart-container {{}}
+.chart-container {{ }}
+footer {{ color: #cbd5e1; text-align:center; padding-top:10px; }}
 </style>
-""" % (COLORS["receita"], COLORS["despesa"])
+"""
+st.set_page_config(page_title="Dashboard Financeiro Caec", layout="wide", initial_sidebar_state="expanded",
+                   menu_items={"About": "Dashboard Financeiro Caec © 2025"})
 
 # -------------------- UTILITÁRIOS --------------------
 
@@ -113,18 +118,18 @@ def money_fmt_br(value: float) -> str:
 
 def get_category_color_map(df: pd.DataFrame) -> Dict[str, str]:
     """Mapeia categorias para cores — prioriza paleta institucional como acentos."""
+    if df is None or df.empty:
+        return {}
     cats = sorted(df["CATEGORIA"].dropna().unique())
     base = [
         "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b",
         "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
     ]
-    # garante que azul institucional apareça primeiro e amarelo como destaque
     palette = [INSTITUTIONAL["azul"], INSTITUTIONAL["amarelo"]] + base
-    # se categorias maiores, cicla
     colors = [palette[i % len(palette)] for i in range(len(cats))]
     return {cat: colors[i] for i, cat in enumerate(cats)}
 
-# -------------------- GOOGLE SHEETS --------------------
+# -------------------- GOOGLE SHEETS (OPCIONAL) --------------------
 
 @st.cache_resource(ttl=600)
 def get_gspread_client() -> Optional[GSpreadClient]:
@@ -283,8 +288,8 @@ def plot_pie_composicao(df: pd.DataFrame, kind: str = "Receita", category_colors
     labels = series.index.tolist()
     values = series.values
     marker_colors = [category_colors.get(l, COLORS["neutral"]) for l in labels] if category_colors else None
-    # Donut com hole grande e textos externos para evitar sobreposição
-    fig = go.Figure(go.Pie(labels=labels, values=values, hole=0.55, marker=dict(colors=marker_colors), textinfo='percent', textposition='outside', insidetextorientation='radial', sort=False))
+    fig = go.Figure(go.Pie(labels=labels, values=values, hole=0.55, marker=dict(colors=marker_colors),
+                           textinfo='percent', textposition='outside', insidetextorientation='radial', sort=False))
     fig.update_layout(height=DEFAULT_CHART_HEIGHT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", legend=dict(orientation='v', y=0.5, x=1.02))
     return fig
 
@@ -458,13 +463,10 @@ def _kpi_delta_text_and_color(curr: float, prev: float, positive_is_good: bool =
     positive_is_good=True: aumento é bom (verde). False: aumento é ruim (despesa).
     """
     diff = curr - prev
-    # percentual relativo a prev (evitar divisão por zero)
     pct = (diff / abs(prev)) * 100 if abs(prev) > 0.0001 else (100.0 if abs(diff) > 0.0 else 0.0)
-    # format
     sign = "+" if diff >= 0 else "-"
     absdiff = abs(diff)
     txt = f"{sign}{money_fmt_br(absdiff)} ({sign}{pct:.0f}%)"
-    # decide cor: se aumento e é bom -> normal (verde). se aumento e é ruim -> inverse (vermelho)
     if diff == 0:
         delta_color = "off"
     else:
@@ -484,30 +486,25 @@ def render_kpi_cards(df: pd.DataFrame):
         st.info("Sem dados para KPIs")
         return
 
-    # determina o fim do período como a última data disponível no dataset filtrado
     end = df["DATA"].max()
     last30_end = pd.to_datetime(end)
-    last30_start = last30_end - pd.Timedelta(days=29)  # inclui o dia final -> 30 dias
+    last30_start = last30_end - pd.Timedelta(days=29)
     prev30_end = last30_start - pd.Timedelta(seconds=1)
     prev30_start = prev30_end - pd.Timedelta(days=29)
 
-    # soma dos períodos
     receita_curr = _sum_period(df, last30_start, last30_end, tipo="receita")
     receita_prev = _sum_period(df, prev30_start, prev30_end, tipo="receita")
-    despesa_curr = _sum_period(df, last30_start, last30_end, tipo="despesa")  # negativo
+    despesa_curr = _sum_period(df, last30_start, last30_end, tipo="despesa")
     despesa_prev = _sum_period(df, prev30_start, prev30_end, tipo="despesa")
     saldo_curr = receita_curr + despesa_curr
     saldo_prev = receita_prev + despesa_prev
 
-    # constrói textos e cores
     txt_rec_delta, color_rec = _kpi_delta_text_and_color(receita_curr, receita_prev, positive_is_good=True)
-    txt_dep_delta, color_dep = _kpi_delta_text_and_color(-despesa_curr, -despesa_prev, positive_is_good=False)  # passamos abs
+    txt_dep_delta, color_dep = _kpi_delta_text_and_color(-despesa_curr, -despesa_prev, positive_is_good=False)
     txt_saldo_delta, color_saldo = _kpi_delta_text_and_color(saldo_curr, saldo_prev, positive_is_good=True)
 
-    # Render com HTML para controlar cor do número principal
     c1, c2, c3 = st.columns(3)
     with c1:
-        # Receita (verde)
         _render_kpi_card_html(
             title="Receita (últimos 30d)",
             value=money_fmt_br(receita_curr),
@@ -516,7 +513,6 @@ def render_kpi_cards(df: pd.DataFrame):
             delta_color=color_rec
         )
     with c2:
-        # Despesa (vermelho) mostramos valor absoluto e delta referente a magnitude
         _render_kpi_card_html(
             title="Despesa (últimos 30d)",
             value=money_fmt_br(abs(despesa_curr)),
@@ -525,7 +521,6 @@ def render_kpi_cards(df: pd.DataFrame):
             delta_color=color_dep
         )
     with c3:
-        # Saldo azul
         _render_kpi_card_html(
             title="Saldo (últimos 30d)",
             value=money_fmt_br(saldo_curr),
@@ -535,24 +530,19 @@ def render_kpi_cards(df: pd.DataFrame):
         )
 
 def _render_kpi_card_html(title: str, value: str, delta: str, value_color: str, delta_color: str):
-    """
-    HTML small card: title, value (colored), delta (with arrow and color).
-    delta_color is 'normal' | 'inverse' | 'off' (streamlit names). We'll map to arrows/colors.
-    """
     arrow = "—"
     arrow_color = "#bfc9d3"
     if delta_color == "normal":
         arrow = "▲"
-        arrow_color = COLORS["receita"] if value_color != COLORS["despesa"] else COLORS["receita"]
+        arrow_color = COLORS["receita"]
     elif delta_color == "inverse":
         arrow = "▼"
         arrow_color = COLORS["despesa"]
-    # build html
     html = f"""
     <div class="kpi-card">
       <div class="kpi-label">{title}</div>
       <div class="kpi-value" style="color:{value_color};">{value}</div>
-      <div class="kpi-delta"><span style="color:{arrow_color}; font-weight:700;">{arrow}</span><span style="color:#bfc9d3;">{delta}</span></div>
+      <div class="kpi-delta"><span style="color:{arrow_color}; font-weight:700;">{arrow}</span><span style="color:#bfc9d3;"> {delta}</span></div>
     </div>
     """
     st.markdown(html, unsafe_allow_html=True)
@@ -576,7 +566,6 @@ def _prepare_export_csv(df: pd.DataFrame) -> str:
 # -------------------- MAIN --------------------
 
 def main():
-    st.set_page_config(page_title="Dashboard Financeiro Caec", layout="wide", initial_sidebar_state="expanded", menu_items={"About": "Dashboard Financeiro Caec © 2025"})
     st.markdown(MINIMAL_CSS, unsafe_allow_html=True)
     st.title("Dashboard Financeiro Caec")
 
@@ -598,7 +587,6 @@ def main():
     page, filters = sidebar_filters_and_controls(df)
     df_filtered = apply_filters(df, filters)
 
-    # mapeamento de cores por categoria (consistente)
     category_colors = get_category_color_map(df_filtered)
 
     # KPIs refatorados (últimos 30 dias)
