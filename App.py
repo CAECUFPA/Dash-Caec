@@ -1,6 +1,6 @@
 """
-Dashboard Financeiro Caec — Versão FINAL/CORRIGIDA: Tipografia, Blueprint Transparente e Layout OK.
-Paleta institucional e fontes aplicadas conforme o manual de identidade.
+Dashboard Financeiro Caec — Versão FINAL/OTIMIZADA: Blueprint Mais Visível e Gráficos de Rosca (Donut) com %.
+Paleta institucional e fontes aplicadas.
 """
 
 from datetime import datetime, timedelta
@@ -20,39 +20,36 @@ try:
     from gspread.client import Client as GSpreadClient
     from oauth2client.service_account import ServiceAccountCredentials
 except ImportError:
-    # Classes Mock para garantir que o script não quebre por falta de dependências externas
     class GSpreadClient: pass
     class ServiceAccountCredentials:
         @staticmethod
         def from_json_keyfile_dict(a, b): return None
 
-# -------------------- CONFIGURAÇÃO GERAL E CSS CORRIGIDO --------------------
+# -------------------- CONFIGURAÇÃO GERAL E CSS CORRIGIDO (Blueprint + Evidente) --------------------
 
 EXPECTED_COLS = ["DATA", "TIPO", "CATEGORIA", "DESCRIÇÃO", "VALOR", "OBSERVAÇÃO"]
 
-# Institucional + cores operacionais
 INSTITUTIONAL = {
     "azul": "#042b51",    # base institucional (Títulos)
     "amarelo": "#f6d138", # acento institucional (Tendência)
     "branco": "#ffffff",
     "preto": "#231f20"
 }
-# cores para KPIs (mantemos receita verde e despesa vermelho e saldo azul)
 COLORS = {
-    "receita": "#2ca02c",  # verde
-    "despesa": "#d62728",  # vermelho
-    "saldo": "#1f77b4",    # azul para saldo
+    "receita": "#2ca02c",
+    "despesa": "#d62728",
+    "saldo": "#1f77b4",
     "trend": INSTITUTIONAL["amarelo"],
     "neutral": "#6c757d",
 }
 
 DEFAULT_CHART_HEIGHT = 360
 
-# NOVO BLUEPRINT: Usando RGBA de baixa opacidade para linhas (SEM OPACITY GLOBAL NO .stApp)
+# NOVO BLUEPRINT: Aumentando a opacidade das linhas para 0.4 (de 0.1)
 BLUEPRINT_BACKGROUND_CSS = """
   background-image:
-    linear-gradient(0deg, var(--bg-line-rgba-01) 1px, transparent 1px),
-    linear-gradient(90deg, var(--bg-line-rgba-01) 1px, transparent 1px);
+    linear-gradient(0deg, var(--bg-line-rgba-04) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bg-line-rgba-04) 1px, transparent 1px);
   background-size: 20px 20px;
   background-position: -1px -1px;
 """
@@ -60,12 +57,12 @@ BLUEPRINT_BACKGROUND_CSS = """
 MINIMAL_CSS = f"""
 <style>
 /* ------------------------------------------------------------------- */
-/* 0. IMPORTAÇÃO DE FONTES (TIPOGRAFIA) */
+/* 0. IMPORTAÇÃO DE FONTES */
 /* ------------------------------------------------------------------- */
 @import url('https://fonts.googleapis.com/css2?family=Anton&family=Six+Caps&family=League+Spartan&family=Open+Sans:wght@400;700&display=swap');
 
 /* ------------------------------------------------------------------- */
-/* 1. VARIÁVEIS DE TEMA (CORRIGIDAS PARA RGBA) */
+/* 1. VARIÁVEIS DE TEMA (CORRIGIDAS PARA RGBA MAIS FORTE) */
 /* ------------------------------------------------------------------- */
 
 :root {{
@@ -81,7 +78,7 @@ MINIMAL_CSS = f"""
   --text-main: {INSTITUTIONAL['preto']};
   --text-secondary: #6c757d;
   --card-border: #e0e0e0;
-  --bg-line-rgba-01: rgba(224, 224, 224, 0.1); /* Linhas CLARAS muito sutis */
+  --bg-line-rgba-04: rgba(224, 224, 224, 0.4); /* Linhas CLARAS mais visíveis */
 }}
 
 /* Modo ESCURO */
@@ -92,7 +89,7 @@ MINIMAL_CSS = f"""
         --text-main: #e6e6e6;
         --text-secondary: #bfc9d3;
         --card-border: #2c3641;
-        --bg-line-rgba-01: rgba(44, 54, 65, 0.15); /* Linhas ESCURAS muito sutis */
+        --bg-line-rgba-04: rgba(44, 54, 65, 0.4); /* Linhas ESCURAS mais visíveis */
     }}
 }}
 
@@ -103,31 +100,30 @@ MINIMAL_CSS = f"""
 .stApp {{
   background-color: var(--bg-main);
   color: var(--text-main);
-  /* Corpo/Legendas: Open Sans */
   font-family: 'Open Sans', sans-serif; 
   {BLUEPRINT_BACKGROUND_CSS} 
 }}
 
-/* Títulos, Subtítulos, Chamadas e KPI Value: Anton, Six Caps, League Spartan */
+/* Títulos, Subtítulos, Chamadas e KPI Value */
 h1, h2, h3, h4, .st-emotion-cache-e67m5x, .kpi-value {{ 
     font-family: 'Anton', 'Six Caps', 'League Spartan', sans-serif;
     color: var(--caec-azul);
 }}
 
-/* Sidebar - Fundo transparente (CORRIGIDO) e sem borda */
+/* Sidebar - Fundo transparente (MANTIDO) */
 .st-emotion-cache-vk34a3, .st-emotion-cache-1cypk8n {{
     background-color: transparent !important;
     border-right: none !important; 
 }}
 
-/* Sidebar texto - Garante Open Sans para o corpo na sidebar */
+/* Sidebar texto */
 .st-emotion-cache-1cypk8n, .st-emotion-cache-1cypk8n * {{
     color: var(--text-main);
     font-family: 'Open Sans', sans-serif; 
 }}
 
 /* ------------------------------------------------------------------- */
-/* 3. ESTILOS DE KPI (MANTIDOS) */
+/* 3. ESTILOS DE KPI */
 /* ------------------------------------------------------------------- */
 
 .kpi-card {{
@@ -137,7 +133,7 @@ h1, h2, h3, h4, .st-emotion-cache-e67m5x, .kpi-value {{
   border: 1px solid var(--card-border);
   box-shadow: none;
   width: 100%;
-  height: 120px; /* Altura fixa para todos os KPIs */
+  height: 120px; 
   display: flex; 
   flex-direction: column;
   justify-content: space-between; 
@@ -156,34 +152,34 @@ footer {{ color: var(--text-secondary); text-align:center; padding-top:10px; }}
 .modebar, .plotly, .js-plotly-plot {{
   background-color: rgba(0,0,0,0) !important;
 }}
+
+/* Título principal mais compacto */
+h1 {{ margin-top: 0rem; margin-bottom: 1rem; }}
 </style>
 """
+# Mantendo o layout wide para responsividade
 st.set_page_config(page_title="Dashboard Financeiro Caec", layout="wide", initial_sidebar_state="expanded",
                    menu_items={"About": "Dashboard Financeiro Caec © 2025"})
 
 # -------------------- UTILITÁRIOS (MANTIDOS) --------------------
 
 def parse_val_str_to_float(val) -> float:
-    if pd.isna(val) or val == "":
-        return 0.0
+    if pd.isna(val) or val == "": return 0.0
     s = str(val).strip()
     neg = False
     if (s.startswith("(") and s.endswith(")")) or s.startswith("-"):
         neg = True
         s = s.strip("()-")
     s = s.replace("R$", "").replace(" ", "").replace(".", "").replace(",", ".")
-    try:
-        v = float(s)
-    except Exception:
-        return 0.0
+    try: v = float(s)
+    except Exception: return 0.0
     return -abs(v) if neg else abs(v)
 
 def money_fmt_br(value: float) -> str:
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def get_category_color_map(df: pd.DataFrame) -> Dict[str, str]:
-    if df is None or df.empty:
-        return {}
+    if df is None or df.empty: return {}
     cats = sorted(df["CATEGORIA"].dropna().unique())
     base = [
         "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b",
@@ -202,24 +198,20 @@ def get_gspread_client() -> Optional[GSpreadClient]:
         creds_dict = st.secrets["gcp_service_account"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scopes)
         return gspread.authorize(creds)
-    except Exception:
-        return None
+    except Exception: return None
 
 def load_sheet_values(client: GSpreadClient) -> List[List[str]]:
-    if not client:
-        return []
+    if not client: return []
     try:
         spreadsheet_name = st.secrets["SPREADSHEET_NAME"]
         worksheet_index = int(st.secrets.get("WORKSHEET_INDEX", 0))
         sh = client.open(spreadsheet_name)
         ws = sh.get_worksheet(worksheet_index)
         return ws.get_all_values()
-    except Exception as e:
-        return []
+    except Exception as e: return []
 
 def build_dataframe(values: List[List[str]]) -> Tuple[pd.DataFrame, bool]:
-    if not values or len(values) < 2:
-        return pd.DataFrame(columns=EXPECTED_COLS), False
+    if not values or len(values) < 2: return pd.DataFrame(columns=EXPECTED_COLS), False
     header = [str(h).strip() for h in values[1]]
     body = values[2:] if len(values) > 2 else []
     header_mismatch = False
@@ -230,10 +222,8 @@ def build_dataframe(values: List[List[str]]) -> Tuple[pd.DataFrame, bool]:
         max_len = max((len(row) for row in body), default=0)
         target_len = max(max_len, len(EXPECTED_COLS))
         padded = [row + [""] * max(0, target_len - len(row)) for row in body]
-        if padded:
-            df = pd.DataFrame(padded, columns=EXPECTED_COLS)
-        else:
-            df = pd.DataFrame(columns=EXPECTED_COLS)
+        if padded: df = pd.DataFrame(padded, columns=EXPECTED_COLS)
+        else: df = pd.DataFrame(columns=EXPECTED_COLS)
     return df, header_mismatch
 
 def preprocess_df(df_raw: pd.DataFrame) -> pd.DataFrame:
@@ -273,7 +263,7 @@ def load_and_preprocess_data() -> Tuple[pd.DataFrame, bool]:
         mock_data = {
             "DATA": [datetime.now() - timedelta(days=d) for d in range(60)] * 2,
             "TIPO": ["Receita"] * 60 + ["Despesa"] * 60,
-            "CATEGORIA": ["Mensalidade", "Marketing", "Evento", "Aluguel"] * 30,
+            "CATEGORIA": ["Mensalidade", "Marketing", "Evento", "Aluguel", "NÃO CATEGORIZADO"] * 24,
             "DESCRIÇÃO": [f"Item {i}" for i in range(120)],
             "VALOR": [f"{1000 * (1 if i % 2 == 0 else -1)}" for i in range(120)],
             "OBSERVAÇÃO": ["N/D"] * 120,
@@ -282,12 +272,11 @@ def load_and_preprocess_data() -> Tuple[pd.DataFrame, bool]:
         return df_full, False
 
     df_raw, header_mismatch = build_dataframe(load_sheet_values(client))
-    if df_raw.empty:
-        return df_raw, header_mismatch
+    if df_raw.empty: return df_raw, header_mismatch
     df_processed = preprocess_df(df_raw)
     return df_processed, header_mismatch
 
-# -------------------- PLOTS (MANTIDOS E COMPLETOS) --------------------
+# -------------------- PLOTS (DONUT/ROSCA NO LUGAR DO TREEMAP) --------------------
 
 def _get_empty_fig(text: str = "Sem dados") -> go.Figure:
     fig = go.Figure()
@@ -340,7 +329,8 @@ def plot_categoria_barras(df: pd.DataFrame, kind: str = "Receita", category_colo
     fig.update_yaxes(title_text="Categoria")
     return fig
 
-def plot_treemap_composicao(df: pd.DataFrame, kind: str = "Receita", category_colors: Dict[str,str]=None) -> go.Figure:
+# NOVO: Função de Plotly para Gráfico de Rosca (Donut) com Porcentagem
+def plot_donut_composicao(df: pd.DataFrame, kind: str = "Receita", category_colors: Dict[str,str]=None) -> go.Figure:
     if kind == "Receita":
         df_plot = df[df["VALOR_NUM"] > 0].groupby("CATEGORIA")["VALOR_NUM"].sum().reset_index()
         df_plot.columns = ["CATEGORIA", "VALOR"]
@@ -348,15 +338,31 @@ def plot_treemap_composicao(df: pd.DataFrame, kind: str = "Receita", category_co
         df_plot = df[df["VALOR_NUM"] < 0].groupby("CATEGORIA")["VALOR_NUM"].sum().abs().reset_index()
         df_plot.columns = ["CATEGORIA", "VALOR"]
         
-    if df_plot.empty: return _get_empty_fig(f"Sem dados de {kind}")
+    if df_plot.empty:
+        return _get_empty_fig(f"Sem dados de {kind}")
 
-    fig = px.treemap(df_plot, path=[px.Constant("Total"), 'CATEGORIA'], values='VALOR',
-                     color='CATEGORIA', color_discrete_map={**category_colors, "Total": INSTITUTIONAL["azul"]}) 
-    fig.update_layout(height=DEFAULT_CHART_HEIGHT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                      title=f'Composição de {kind} (Treemap)')
-    fig.update_traces(textinfo='label+percent entry') 
+    # Plotly Donut Chart
+    fig = go.Figure(data=[go.Pie(
+        labels=df_plot['CATEGORIA'],
+        values=df_plot['VALOR'],
+        hole=.4, # Define como Donut
+        marker=dict(colors=[category_colors.get(c, COLORS['neutral']) for c in df_plot['CATEGORIA']]),
+        hovertemplate="%{label}: R$ %{value:,.2f} (%{percent})<extra></extra>",
+        textinfo='label+percent', # Exibe Rótulo e Porcentagem
+        insidetextorientation='radial'
+    )])
+
+    fig.update_layout(
+        height=DEFAULT_CHART_HEIGHT, 
+        paper_bgcolor="rgba(0,0,0,0)", 
+        plot_bgcolor="rgba(0,0,0,0)",
+        title=f'Composição de {kind} (Setor)',
+        margin=dict(t=50, b=50, l=10, r=10), # Ajustar margens para melhor visualização
+        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.05) # Mover legenda para a direita
+    )
     return fig
 
+# Funções de análise avançada (mantidas)
 def plot_bubble_transacoes_categoria_y(df: pd.DataFrame, category_colors: Dict[str,str]=None) -> go.Figure:
     if df.empty: return _get_empty_fig("Sem transações")
     df_plot = df.copy()
@@ -496,7 +502,7 @@ def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
         f = f[f["CATEGORIA"].isin(cats)]
     return f.reset_index(drop=True)
 
-# -------------------- KPIs (MANTIDOS E COMPLETOS) --------------------
+# -------------------- KPIs (MANTIDOS) --------------------
 
 def _sum_period(df: pd.DataFrame, start_dt: datetime, end_dt: datetime, tipo: str = "all") -> float:
     if df.empty: return 0.0
@@ -611,12 +617,11 @@ def main():
     try:
         df_full, header_mismatch = load_and_preprocess_data()
     except Exception as e:
-        st.warning(f"Erro ao carregar dados do Google Sheets: {e}. Usando dados de exemplo para demonstração.")
-        # Usar DF mock para demonstração
+        # Usar DF mock se a importação falhar
         mock_data = {
             "DATA": [datetime.now() - timedelta(days=d) for d in range(60)] * 2,
             "TIPO": ["Receita"] * 60 + ["Despesa"] * 60,
-            "CATEGORIA": ["Mensalidade", "Marketing", "Evento", "Aluguel"] * 30,
+            "CATEGORIA": ["Mensalidade", "Marketing", "Evento", "Aluguel", "NÃO CATEGORIZADO"] * 24,
             "DESCRIÇÃO": [f"Item {i}" for i in range(120)],
             "VALOR": [f"{1000 * (1 if i % 2 == 0 else -1)}" for i in range(120)],
             "OBSERVAÇÃO": ["N/D"] * 120,
@@ -658,16 +663,18 @@ def main():
             st.markdown("### 💰 Composição Financeira por Categoria")
             col1, col2 = st.columns(2)
             
+            # Gráficos de Barras (Mantidos)
             with col1:
                 st.plotly_chart(plot_categoria_barras(df_filtered, kind="Receita", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_rec_bar_comb")
             with col2:
                 st.plotly_chart(plot_categoria_barras(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_dep_bar_comb")
 
+            # Gráficos de Rosca (Donut) - NOVO/CORRIGIDO
             col3, col4 = st.columns(2)
             with col3:
-                st.plotly_chart(plot_treemap_composicao(df_filtered, kind="Receita", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_treemap_rec_comb")
+                st.plotly_chart(plot_donut_composicao(df_filtered, kind="Receita", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_donut_rec_comb")
             with col4:
-                st.plotly_chart(plot_treemap_composicao(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_treemap_dep_comb")
+                st.plotly_chart(plot_donut_composicao(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_donut_dep_comb")
 
             st.markdown("---")
             st.subheader("Visão Temporal de Lançamentos (por Categoria)")
