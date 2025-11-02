@@ -1,14 +1,4 @@
-"""
-Dashboard Financeiro Caec
-Versão refatorada para uso com Streamlit Cloud Secrets.
-Estilo de KPI aprimorado usando recursos nativos do Streamlit (mínimo CSS).
-Ajustes solicitados: Correção da exibição do delta do Saldo e padronização do rodapé.
-CORREÇÃO CRÍTICA: Limpeza e remoção de categorias indesejadas (vazias, "6", "7")
-CORREÇÕES NOVAS: 
-    1. CSS não exposto na UI.
-    2. Seta de delta para Saldo nos KPIs.
-    3. Aviso amarelo de cabeçalho gerenciado fora do cache de dados.
-"""
+# app.py (Código Completo)
 
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple, Optional
@@ -42,8 +32,9 @@ COLORS = {
 DEFAULT_CHART_HEIGHT = 360
 
 # ---------- CSS (Fonte customizada e Estilo de KPI) ----------
-# Este CSS é usado para estilizar os valores dos KPIs e garantir 
-# que a seta do delta apareça mesmo sem texto numérico.
+# CORREÇÃO CRÍTICA: Os comentários de barra simples foram substituídos 
+# por comentários de bloco CSS (/* ... */) válidos para não expor 
+# o código na UI.
 KPI_VALUE_COLOR_CSS = """
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -63,7 +54,7 @@ KPI_VALUE_COLOR_CSS = """
 
   /* Hack para forçar a seta do delta a aparecer mesmo com delta=None/"" */
   /* Remove o espaço reservado para o texto do delta se ele for vazio */
-  [data-testid="stMetricDelta"] {
+  [data-testid="stMetricDelta"] { 
     display: flex; 
     align-items: center;
     justify-content: flex-end;
@@ -163,23 +154,32 @@ def build_dataframe(values: List[List[str]]) -> Tuple[pd.DataFrame, bool]:
     Constrói um DataFrame Pandas a partir da lista de valores da planilha,
     garantindo que as colunas esperadas (EXPECTED_COLS) existam.
     Retorna o DataFrame e um booleano indicando se o cabeçalho falhou.
-    (Aviso em amarelo resolvido aqui - o aviso é movido para o load_and_preprocess_data)
+    (Lógica de checagem do cabeçalho ajustada)
     """
     if not values or len(values) < 1:
         return pd.DataFrame(columns=EXPECTED_COLS), False
         
-    header = values[0]
+    header = [str(h).strip() for h in values[0]]
     body = values[1:] if len(values) > 1 else []
     
     header_mismatch = False
     
-    # Verifica se o cabeçalho bate com o esperado
+    # Checa se TODOS os cabeçalhos esperados estão no cabeçalho lido, 
+    # independentemente da ordem.
     if all(col in header for col in EXPECTED_COLS):
+        # Cria o DF e seleciona as colunas na ordem correta
         df = pd.DataFrame(body, columns=header)[EXPECTED_COLS].copy()
     else:
-        # Se o cabeçalho não bater, força as colunas esperadas
+        # Se o cabeçalho não bater (AVISO AMELO), força as colunas esperadas
         header_mismatch = True
-        padded = [row + [""] * max(0, len(EXPECTED_COLS) - len(row)) for row in body]
+        
+        # Para evitar IndexError, preenche linhas curtas com strings vazias
+        max_len = max(len(row) for row in body) if body else 0
+        target_len = max(max_len, len(EXPECTED_COLS))
+        
+        padded = [row + [""] * max(0, target_len - len(row)) for row in body]
+        
+        # Cria um DF forçado com as colunas esperadas
         df = pd.DataFrame(padded, columns=EXPECTED_COLS)
         
     return df, header_mismatch
@@ -189,8 +189,6 @@ def build_dataframe(values: List[List[str]]) -> Tuple[pd.DataFrame, bool]:
 def preprocess_df(df_raw: pd.DataFrame) -> pd.DataFrame:
     """
     Aplica a limpeza e transformação principal no DataFrame.
-    Converte datas, limpa valores numéricos, preenche NAs e calcula
-    colunas auxiliares como Saldo Acumulado e ano-mês.
     """
     df = df_raw.copy()
     
@@ -242,29 +240,22 @@ def preprocess_df(df_raw: pd.DataFrame) -> pd.DataFrame:
     return df
 
 @st.cache_data(ttl=600)
-def load_and_preprocess_data() -> pd.DataFrame:
+def load_and_preprocess_data() -> Tuple[pd.DataFrame, bool]:
     """
     Função principal de carregamento e processamento de dados.
-    Conecta no GSheets, carrega os dados, constrói o DataFrame
-    e aplica o pré-processamento. O resultado é cacheado.
-    (Aviso em amarelo resolvido aqui - o st.warning é chamado se o cache
-    tiver sido invalidado e houver um mismatch no header)
+    Retorna o DF e o status do cabeçalho.
     """
     client = get_gspread_client()
     if not client:
-        return pd.DataFrame(columns=EXPECTED_COLS) # Retorna DF vazio se cliente falhar
+        return pd.DataFrame(columns=EXPECTED_COLS), False
         
     df_raw, header_mismatch = build_dataframe(load_sheet_values(client))
     
-    # Exibe o aviso se o cabeçalho não bateu (fora da função de cache)
-    if header_mismatch:
-        st.warning("Cabeçalho da planilha não corresponde ao esperado. Tentando carregar mesmo assim.")
-
     if df_raw.empty:
-        return df_raw
+        return df_raw, header_mismatch
         
     df_processed = preprocess_df(df_raw)
-    return df_processed
+    return df_processed, header_mismatch
 
 # ---------- FUNÇÕES DE PLOTAGEM (Gráficos) ----------
 
@@ -575,9 +566,10 @@ def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
     """
     Renderiza a barra lateral com os filtros de página, período e categoria.
     Retorna a página selecionada e um dicionário de filtros.
+    (Remoção do CAEC © 2025 do topo da sidebar)
     """
     st.sidebar.title("Dashboard Financeiro Caec")
-    st.sidebar.markdown("CAEC © 2025") # Mantido aqui
+    # st.sidebar.markdown("CAEC © 2025") <-- REMOVIDO DAQUI
     st.sidebar.markdown("---")
 
     # 1. Seletor de Página/Visualização
@@ -659,7 +651,7 @@ def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
         st.sidebar.success("Cache limpo! O app recarregará os dados.")
 
     st.sidebar.markdown("---")
-    # Novo local para o texto do Rick
+    # Novo local para o texto do Rick (agora é o único item aqui)
     st.sidebar.caption("Criado e administrado pela diretoria de Administração Comercial e Financeiro - by Rick")
 
     return page, filters
@@ -785,13 +777,14 @@ def main():
     st.title("Dashboard Financeiro Caec")
 
     # --- Carregamento de Dados ---
-    try:
-        # load_and_preprocess_data gerencia o aviso amarelo
-        df = load_and_preprocess_data()
-    except Exception as e:
-        st.error(f"Erro fatal ao carregar os dados: {e}")
-        st.warning("Verifique a configuração dos Secrets e o formato da planilha.")
-        return 
+    # CORREÇÃO CRÍTICA: A função agora retorna o status do cabeçalho
+    df, header_mismatch = load_and_preprocess_data()
+    
+    if header_mismatch:
+        # Exibe o aviso fora do st.cache_data (garantindo que o aviso não 
+        # reapareça a cada mudança de filtro, mas apareça após o carregamento)
+        st.warning("Cabeçalho da planilha não corresponde ao esperado. Tentando carregar mesmo assim.")
+
 
     if df.empty:
         st.sidebar.markdown("---")
@@ -906,6 +899,7 @@ def main():
         )
 
     # --- Rodapé ---
+    # CORREÇÃO: Consolidação do CAEC © 2025 com a assinatura do Rick
     st.markdown("---")
     st.markdown(
         "<div style='font-size:12px;color:gray;text-align:center'>"
@@ -915,8 +909,5 @@ def main():
     )
 
 # Ponto de entrada padrão para execução do script
-# ... (Linhas de código anteriores) ...
-
-# Ponto de entrada padrão para execução do script
 if __name__ == "__main__":
-    main() # Linha 919: Esta linha PRECISA estar indentada!
+    main()
