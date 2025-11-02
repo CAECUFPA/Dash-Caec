@@ -1,6 +1,6 @@
 """
-Dashboard Financeiro Caec — Versão FINAL #5: UI/UX Otimizada (Cards e Cores de KPI)
-Garante que os gráficos fiquem em cards com fundo para se destacar do Blueprint e restaura as cores dos KPIs.
+Dashboard Financeiro Caec — Versão FINAL #6: Correção de Injeção CSS e Harmonização de Cards.
+Foca em remover o erro visual de </style> e refinar o estilo de card (UI/UX).
 """
 
 from datetime import datetime, timedelta
@@ -54,7 +54,7 @@ BLUEPRINT_BACKGROUND_CSS = """
 
 def get_dynamic_css() -> str:
     """
-    Gera o CSS dinâmico. Adiciona estilo de card para todos os containers de gráficos e tabelas.
+    Gera o CSS dinâmico. CORRIGIDO: Remoção de tags HTML para evitar erro visual no topo.
     """
     
     css_vars = f"""
@@ -72,7 +72,7 @@ def get_dynamic_css() -> str:
       --sidebar-bg-transparent: rgba(255, 255, 255, 0.15); 
       --sidebar-border: rgba(200, 200, 200, 0.8);
       --bg-line-color: var(--bg-line-color-light);
-      --card-padding: 18px; /* Padding ajustado para melhor UX */
+      --card-padding: 18px; 
     }}
 
     @media (prefers-color-scheme: dark) {{
@@ -97,6 +97,12 @@ def get_dynamic_css() -> str:
         border-right: 1px solid var(--sidebar-border) !important; 
     }}
 
+    /* Garante que o texto da sidebar use a cor de fonte padrão do tema */
+    .st-emotion-cache-1cypk8n *, .st-emotion-cache-1d371w8 * {{
+        color: var(--st-font-color) !important; 
+        font-family: 'Open Sans', sans-serif; 
+    }}
+
     /* ------------------------------------------------------------------- */
     /* 2. Aplicação de Estilos Gerais, Blueprint e Tipografia */
     /* ------------------------------------------------------------------- */
@@ -108,34 +114,33 @@ def get_dynamic_css() -> str:
       {BLUEPRINT_BACKGROUND_CSS} 
     }}
 
+    h1 {{ margin-top: 0rem; margin-bottom: 1rem; color: var(--caec-azul) !important;}}
+    
     /* Títulos e KPI Value */
-    h1, h2, h3, h4, .st-emotion-cache-e67m5x, .kpi-value {{ 
+    h2, h3, h4, .st-emotion-cache-e67m5x, .kpi-value {{ 
         font-family: 'Anton', 'Six Caps', 'League Spartan', sans-serif;
-        /* Corrigido: Remover cor institucional aqui para permitir cores dinâmicas nos KPIs */
-        /* color: var(--caec-azul) !important; */
     }}
     
-    /* Título principal mais compacto */
-    h1 {{ margin-top: 0rem; margin-bottom: 1rem; }}
-    
     /* ------------------------------------------------------------------- */
-    /* 3. Estilos de CARD para Gráficos e Tabelas */
+    /* 3. Estilos de CARD para Gráficos e Tabelas (REFINADO) */
     /* ------------------------------------------------------------------- */
 
-    /* Seletores para os containers que envolvem st.plotly_chart e st.dataframe */
-    /* st.columns e st.container (e seus internos) */
-    .st-emotion-cache-1v4f50, .st-emotion-cache-1n743z1, .st-emotion-cache-1d9g9l8 {{
-        background: var(--st-bgs2); /* Fundo secundário do tema */
+    /* Seletores para os containers de COLUMNS, TABS e CONTAINER (que encapsulam os gráficos/tabelas) */
+    /* Usei seletores mais específicos para evitar aplicar o card ao container principal da tela. */
+    .st-emotion-cache-1v4f50, .st-emotion-cache-1n743z1, .st-emotion-cache-1d9g9l8, .st-emotion-cache-0 {{
+        /* O Streamlit usa o '0' para alguns containers de tabs */
+        background: var(--st-bgs2); 
         border: 1px solid var(--st-bgs3);
         border-radius: 8px;
         padding: var(--card-padding); 
-        margin-bottom: 1.5rem; /* Espaçamento entre cards */
+        margin-bottom: 1.5rem; 
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         transition: all 0.2s ease-in-out;
     }}
     
-    /* Remover card-style do container de KPIs para não duplicar */
-    .st-emotion-cache-1d9g9l8 .st-emotion-cache-1d9g9l8 {{
+    /* Regras para limpar cards aninhados e garantir a harmonia com o layout de colunas e tabs */
+    .st-emotion-cache-1d9g9l8 .st-emotion-cache-1d9g9l8, .st-emotion-cache-0 .st-emotion-cache-0,
+    .st-emotion-cache-1v4f50 .st-emotion-cache-1v4f50, .st-emotion-cache-1n743z1 .st-emotion-cache-1n743z1 {{
         background: transparent;
         border: none;
         padding: 0;
@@ -143,11 +148,22 @@ def get_dynamic_css() -> str:
         box-shadow: none;
     }}
 
-
-    /* Ajusta sub-cabeçalhos dentro do card */
-    .st-emotion-cache-1v4f50 h3, .st-emotion-cache-1n743z1 h3 {{
-        margin-top: 0;
-        margin-bottom: 1rem;
+    /* Ajustar o container que envolve os KPIs, removendo o estilo de card nele (para não ficar aninhado) */
+    .st-emotion-cache-1d9g9l8:has(.kpi-card) {{
+        background: transparent;
+        border: none;
+        padding: 0;
+        margin-bottom: 0;
+        box-shadow: none;
+    }}
+    
+    /* Remove o card-style do container que segura a barra de tabs (para o card começar abaixo da tab) */
+    .st-emotion-cache-1d9g9l8 > div[data-baseweb="tab-list"] + div > .st-emotion-cache-1v4f50 {{
+        background: transparent;
+        border: none;
+        padding: 0;
+        box-shadow: none;
+        margin-bottom: 0;
     }}
 
     /* Remove fundo de gráficos PLOTLY (para o fundo do card aparecer) */
@@ -156,7 +172,7 @@ def get_dynamic_css() -> str:
     }}
 
     /* ------------------------------------------------------------------- */
-    /* 4. Estilos de KPI (Ajuste Final para Cores) */
+    /* 4. Estilos de KPI (MANTIDOS) */
     /* ------------------------------------------------------------------- */
 
     .kpi-card {{
@@ -171,7 +187,6 @@ def get_dynamic_css() -> str:
       flex-direction: column;
       justify-content: space-between; 
       overflow: hidden; 
-      /* Correção: Remover box-shadow dos KPIs para manter a consistência com o estilo do card */
       box-shadow: none;
     }}
     .kpi-label, .kpi-delta {{ 
@@ -181,12 +196,10 @@ def get_dynamic_css() -> str:
     .kpi-value {{ 
         font-size: 26px; 
         font-weight:700; 
-        /* Corrigido: Aplicar a cor dinâmica via style inline no HTML */
     }}
 
     /* Footer */
     footer {{ color: var(--st-font-color-weak); text-align:center; padding-top:10px; }}
-    </style>
     """
     return f"<style>{css_vars}</style>"
 
@@ -194,8 +207,6 @@ st.set_page_config(page_title="Dashboard Financeiro Caec", layout="wide", initia
                    menu_items={"About": "Dashboard Financeiro Caec © 2025"})
 
 # -------------------- UTILITÁRIOS E PRÉ-PROCESSAMENTO (MANTIDOS) --------------------
-# ... (Funções de parsing, formatação, gspread, preprocess_df, load_and_preprocess_data mantidas)
-# ... (Inclua aqui todas as funções que estavam acima)
 
 def parse_val_str_to_float(val) -> float:
     if pd.isna(val) or val == "": return 0.0
@@ -308,8 +319,6 @@ def load_and_preprocess_data() -> Tuple[pd.DataFrame, bool]:
     df_processed = preprocess_df(df_raw)
     return df_processed, header_mismatch
 
-# -------------------- FUNÇÕES DE FILTRO (MANTIDAS) --------------------
-
 def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
     f = df.copy()
     if filters.get("mode") == "range":
@@ -324,7 +333,6 @@ def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
     return f.reset_index(drop=True)
 
 # -------------------- PLOTS (MANTIDOS) --------------------
-# ... (Funções de plotagem mantidas, como plot_saldo_acumulado, plot_fluxo_diario, etc.)
 
 def _get_empty_fig(text: str = "Sem dados") -> go.Figure:
     fig = go.Figure()
@@ -452,6 +460,21 @@ def plot_bubble_transacoes_valor_y(df: pd.DataFrame, category_colors: Dict[str,s
     fig.update_yaxes(title_text="Valor (R$)")
     return fig
 
+def plot_candlestick(df: pd.DataFrame, freq: str = "D") -> go.Figure:
+    ohlc = prepare_ohlc_period(df, freq)
+    if ohlc.empty: return _get_empty_fig("Sem dados para candlestick")
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.04, row_heights=[0.72, 0.28])
+    fig.add_trace(go.Candlestick(x=ohlc["ts"], open=ohlc["open"], high=ohlc["high"], low=ohlc["low"], close=ohlc["close"],
+                                 increasing_line_color=COLORS["receita"], decreasing_line_color=COLORS["despesa"]), row=1, col=1)
+    fig.add_trace(go.Bar(x=ohlc["ts"], y=ohlc["volume"], name="Volume", marker_color=COLORS["neutral"]), row=2, col=1)
+    ohlc["sma7"] = ohlc["close"].rolling(window=7, min_periods=1).mean()
+    fig.add_trace(go.Scatter(x=ohlc["ts"], y=ohlc["sma7"], mode="lines", name="SMA7", line=dict(color=COLORS["trend"])), row=1, col=1)
+    fig.update_layout(height=DEFAULT_CHART_HEIGHT+80, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis_rangeslider_visible=False)
+    fig.update_xaxes(title_text="Período", row=2, col=1)
+    fig.update_yaxes(title_text="Valor (R$)", row=1, col=1)
+    fig.update_yaxes(title_text="Volume", row=2, col=1)
+    return fig
+
 def prepare_ohlc_period(df: pd.DataFrame, freq: str = "D") -> pd.DataFrame:
     if df.empty: return pd.DataFrame()
     period = df["DATA"].dt.to_period(freq)
@@ -468,21 +491,6 @@ def prepare_ohlc_period(df: pd.DataFrame, freq: str = "D") -> pd.DataFrame:
         groups.append({"PERIOD": per, "ts": per.to_timestamp(), "open": open_v, "high": high_v, "low": low_v, "close": close_v, "volume": vol})
     ohlc = pd.DataFrame(groups).sort_values("ts").reset_index(drop=True)
     return ohlc
-
-def plot_candlestick(df: pd.DataFrame, freq: str = "D") -> go.Figure:
-    ohlc = prepare_ohlc_period(df, freq)
-    if ohlc.empty: return _get_empty_fig("Sem dados para candlestick")
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.04, row_heights=[0.72, 0.28])
-    fig.add_trace(go.Candlestick(x=ohlc["ts"], open=ohlc["open"], high=ohlc["high"], low=ohlc["low"], close=ohlc["close"],
-                                 increasing_line_color=COLORS["receita"], decreasing_line_color=COLORS["despesa"]), row=1, col=1)
-    fig.add_trace(go.Bar(x=ohlc["ts"], y=ohlc["volume"], name="Volume", marker_color=COLORS["neutral"]), row=2, col=1)
-    ohlc["sma7"] = ohlc["close"].rolling(window=7, min_periods=1).mean()
-    fig.add_trace(go.Scatter(x=ohlc["ts"], y=ohlc["sma7"], mode="lines", name="SMA7", line=dict(color=COLORS["trend"])), row=1, col=1)
-    fig.update_layout(height=DEFAULT_CHART_HEIGHT+80, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis_rangeslider_visible=False)
-    fig.update_xaxes(title_text="Período", row=2, col=1)
-    fig.update_yaxes(title_text="Valor (R$)", row=1, col=1)
-    fig.update_yaxes(title_text="Volume", row=2, col=1)
-    return fig
 
 def plot_monthly_heatmap(df: pd.DataFrame) -> go.Figure:
     if df.empty: return _get_empty_fig()
@@ -508,7 +516,6 @@ def plot_boxplot_by_category(df: pd.DataFrame) -> go.Figure:
     return fig
 
 # -------------------- SIDEBAR E FILTROS (MANTIDOS) --------------------
-# ... (Função sidebar_filters_and_controls mantida)
 
 def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
     st.sidebar.title("Dashboard Financeiro Caec")
@@ -551,7 +558,7 @@ def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
     st.sidebar.caption("Criado e administrado pela diretoria de Administração Comercial e Financeiro — by Rick")
     return page, filters
 
-# -------------------- KPIS (AJUSTADO PARA A COR DO VALOR PRINCIPAL) --------------------
+# -------------------- KPIS (MANTIDOS COM CORREÇÃO DE COR) --------------------
 
 def _sum_period(df: pd.DataFrame, start_dt: datetime, end_dt: datetime, tipo: str = "all") -> float:
     if df.empty: return 0.0
@@ -572,9 +579,6 @@ def _kpi_delta_text_and_color(curr: float, prev: float, positive_is_good: bool =
     return txt, delta_color
 
 def _render_kpi_card_html(title: str, value: str, delta: str, value_color_css_var: str, delta_color: str):
-    """
-    Renderiza o card KPI. value_color_css_var agora é o nome da variável CSS (--kpi-receita, --kpi-despesa, etc.).
-    """
     arrow = "—"
     arrow_color = "var(--st-font-color-weak)"
     if delta_color == "normal":
@@ -584,7 +588,6 @@ def _render_kpi_card_html(title: str, value: str, delta: str, value_color_css_va
         arrow = "▼"
         arrow_color = "var(--kpi-despesa)"
     
-    # CORRIGIDO: O valor principal agora usa a variável CSS de cor (value_color_css_var)
     html = f"""
     <div class="kpi-card">
       <div class="kpi-label">{title}</div>
@@ -647,7 +650,6 @@ def render_kpi_cards(df_full: pd.DataFrame, df_filtered: pd.DataFrame):
         )
 
 # -------------------- TABELA / EXPORT (MANTIDOS) --------------------
-# ... (Funções render_table e _prepare_export_csv mantidas)
 
 def render_table(df: pd.DataFrame, key: str):
     if df.empty:
@@ -664,15 +666,18 @@ def _prepare_export_csv(df: pd.DataFrame) -> str:
     return export_df.to_csv(index=False, encoding="utf-8-sig")
 
 
-# -------------------- MAIN FUNCTION (AJUSTADO COM CARDS) --------------------
+# -------------------- MAIN FUNCTION (AJUSTADO COM CARDS OTIMIZADOS) --------------------
 
 def main():
+    # CORRIGIDO: Injeção de CSS no topo para evitar erro de parse no Streamlit.
     st.markdown(get_dynamic_css(), unsafe_allow_html=True)
+    
     st.title("Dashboard Financeiro Caec")
 
     try:
         df_full, header_mismatch = load_and_preprocess_data()
     except Exception as e:
+        # Mock data se a importação falhar
         mock_data = {
             "DATA": [datetime.now() - timedelta(days=d) for d in range(60)] * 2,
             "TIPO": ["Receita"] * 60 + ["Despesa"] * 60,
@@ -715,15 +720,18 @@ def main():
             st.subheader("Lançamentos Recentes (Últimos 10)")
             recent = df_filtered.sort_values("DATA", ascending=False).head(10)
             render_table(recent, key="table_recent_resumo")
+            st.markdown("---") # Separador para o botão de download
             csv = _prepare_export_csv(df_filtered)
             st.download_button("Exportar CSV (Filtro Atual)", csv, file_name="caec_resumo_export.csv", mime="text/csv", key="download_resumo")
 
 
     else:
+        # CORRIGIDO: Garantir que o tab container externo receba o estilo de card (seletor '0')
         tab_normais, tab_avancados, tab_tabela = st.tabs(["📊 Gráficos Principais", "📈 Análise Avançada", "📋 Tabela Completa"])
+        
         with tab_normais:
             
-            # CARD 1: Barras de Composição e Treemap
+            # CARD 1.1 e 1.2: Barras de Composição (Mesmo Container)
             with st.container():
                 st.markdown("### 💰 Composição Financeira por Categoria")
                 col1, col2 = st.columns(2)
@@ -732,6 +740,7 @@ def main():
                 with col2:
                     st.plotly_chart(plot_categoria_barras(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_dep_bar_comb")
 
+            # CARD 2.1 e 2.2: Treemaps (Mesmo Container)
             with st.container():
                 col3, col4 = st.columns(2)
                 with col3:
@@ -739,12 +748,12 @@ def main():
                 with col4:
                     st.plotly_chart(plot_treemap_composicao(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_treemap_dep_comb")
 
-            # CARD 2: Visão Temporal Categoria Y
+            # CARD 3: Visão Temporal Categoria Y
             with st.container():
                 st.subheader("Visão Temporal de Lançamentos (por Categoria)")
                 st.plotly_chart(plot_bubble_transacoes_categoria_y(df_filtered, category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_bubble_cat_y")
 
-            # CARD 3: Visão Detalhada Valor Y
+            # CARD 4: Visão Detalhada Valor Y
             with st.container():
                 st.subheader("Visão Detalhada de Transações")
                 st.plotly_chart(plot_bubble_transacoes_valor_y(df_filtered, category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_bubble_valor_y")
@@ -753,12 +762,12 @@ def main():
             
             # CARD 1: Candlestick
             with st.container():
-                agg_freq = st.selectbox("Agregação Candlestick", options=[("Diário","D"), ("Semanal","W"), ("Mensal","M")], format_func=lambda x: x[0], key="sb_candle_freq")
+                agg_freq = st.selectbox("Agregação Candlestick", options=[("Diário","D"), ("Semanal","W"), ("Mensal","M")], format_func=lambda x: x[0], key="sb_candle_freq_adv")
                 freq_code = agg_freq[1]
                 st.subheader(f"Análise Candlestick ({agg_freq[0]}) e Volume")
                 st.plotly_chart(plot_candlestick(df_filtered, freq=freq_code), use_container_width=True, config={'displayModeBar': False}, key=f"chart_candlestick_{freq_code}")
 
-            # CARD 2: Fluxo/SMA e Boxplot
+            # CARD 2.1 e 2.2: Fluxo/SMA e Boxplot
             col1, col2 = st.columns(2)
             with col1:
                 with st.container():
@@ -787,6 +796,7 @@ def main():
             with st.container():
                 st.subheader("Todos os Lançamentos (Filtro Atual)")
                 render_table(df_filtered, key="table_full_detalhado")
+                st.markdown("---") # Separador para o botão de download
                 csv = _prepare_export_csv(df_filtered)
                 st.download_button("Exportar CSV (Filtro Atual)", csv, file_name="caec_full_export.csv", mime="text/csv", key="download_full")
 
