@@ -1,6 +1,6 @@
 """
-Dashboard Financeiro Caec — Versão FINAL #7: Otimização de Cores, Cards e Novo Gráfico de %.
-Foco em resolver a visibilidade do título, arredondar bordas e substituir o Treemap.
+Dashboard Financeiro Caec — Versão FINAL #5: UI/UX Otimizada (Cards e Cores de KPI)
+Garante que os gráficos fiquem em cards com fundo para se destacar do Blueprint e restaura as cores dos KPIs.
 """
 
 from datetime import datetime, timedelta
@@ -30,7 +30,7 @@ except ImportError:
 EXPECTED_COLS = ["DATA", "TIPO", "CATEGORIA", "DESCRIÇÃO", "VALOR", "OBSERVAÇÃO"]
 
 INSTITUTIONAL = {
-    "azul": "#042b51",    # base institucional (Original)
+    "azul": "#042b51",    # base institucional (Títulos)
     "amarelo": "#f6d138", # acento institucional (Tendência)
 }
 COLORS = {
@@ -54,7 +54,7 @@ BLUEPRINT_BACKGROUND_CSS = """
 
 def get_dynamic_css() -> str:
     """
-    Gera o CSS dinâmico. CORRIGIDO: Cores de H1 e Bordas de Cards.
+    Gera o CSS dinâmico. Adiciona estilo de card para todos os containers de gráficos e tabelas.
     """
     
     css_vars = f"""
@@ -72,8 +72,7 @@ def get_dynamic_css() -> str:
       --sidebar-bg-transparent: rgba(255, 255, 255, 0.15); 
       --sidebar-border: rgba(200, 200, 200, 0.8);
       --bg-line-color: var(--bg-line-color-light);
-      --card-padding: 18px; 
-      --h1-color: #000000; /* Preto para Light Mode */
+      --card-padding: 18px; /* Padding ajustado para melhor UX */
     }}
 
     @media (prefers-color-scheme: dark) {{
@@ -83,7 +82,6 @@ def get_dynamic_css() -> str:
             --sidebar-bg-transparent: rgba(11, 20, 26, 0.4); 
             --sidebar-border: rgba(44, 54, 65, 0.8);
             --bg-line-color: var(--bg-line-color-dark);
-            --h1-color: #FFFFFF; /* Branco para Dark Mode */
         }}
     }}
     
@@ -99,12 +97,6 @@ def get_dynamic_css() -> str:
         border-right: 1px solid var(--sidebar-border) !important; 
     }}
 
-    /* Garante que o texto da sidebar use a cor de fonte padrão do tema */
-    .st-emotion-cache-1cypk8n *, .st-emotion-cache-1d371w8 * {{
-        color: var(--st-font-color) !important; 
-        font-family: 'Open Sans', sans-serif; 
-    }}
-
     /* ------------------------------------------------------------------- */
     /* 2. Aplicação de Estilos Gerais, Blueprint e Tipografia */
     /* ------------------------------------------------------------------- */
@@ -116,36 +108,34 @@ def get_dynamic_css() -> str:
       {BLUEPRINT_BACKGROUND_CSS} 
     }}
 
-    /* CORRIGIDO: Título H1 com cor dinâmica (preto/branco) */
-    h1 {{ 
-        margin-top: 0rem; 
-        margin-bottom: 1rem; 
-        color: var(--h1-color) !important;
+    /* Títulos e KPI Value */
+    h1, h2, h3, h4, .st-emotion-cache-e67m5x, .kpi-value {{ 
+        font-family: 'Anton', 'Six Caps', 'League Spartan', sans-serif;
+        /* Corrigido: Remover cor institucional aqui para permitir cores dinâmicas nos KPIs */
+        /* color: var(--caec-azul) !important; */
     }}
     
-    /* Títulos e KPI Value */
-    h2, h3, h4, .st-emotion-cache-e67m5x, .kpi-value {{ 
-        font-family: 'Anton', 'Six Caps', 'League-Spartan', sans-serif;
-    }}
+    /* Título principal mais compacto */
+    h1 {{ margin-top: 0rem; margin-bottom: 1rem; }}
     
     /* ------------------------------------------------------------------- */
-    /* 3. Estilos de CARD para Gráficos e Tabelas (FUNDO e BORDAS ARREDONDADAS) */
+    /* 3. Estilos de CARD para Gráficos e Tabelas */
     /* ------------------------------------------------------------------- */
 
-    /* Seletores para os containers de COLUMNS, TABS e CONTAINER (que encapsulam os gráficos/tabelas) */
-    .st-emotion-cache-1v4f50, .st-emotion-cache-1n743z1, .st-emotion-cache-1d9g9l8, .st-emotion-cache-0 {{
-        background: var(--st-bgs2); 
+    /* Seletores para os containers que envolvem st.plotly_chart e st.dataframe */
+    /* st.columns e st.container (e seus internos) */
+    .st-emotion-cache-1v4f50, .st-emotion-cache-1n743z1, .st-emotion-cache-1d9g9l8 {{
+        background: var(--st-bgs2); /* Fundo secundário do tema */
         border: 1px solid var(--st-bgs3);
-        border-radius: 12px; /* Aumentado o raio para arredondar mais */
+        border-radius: 8px;
         padding: var(--card-padding); 
-        margin-bottom: 1.5rem; 
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15); /* Sombra mais forte para destacar */
+        margin-bottom: 1.5rem; /* Espaçamento entre cards */
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         transition: all 0.2s ease-in-out;
     }}
     
-    /* Regras para limpar cards aninhados e garantir a harmonia */
-    .st-emotion-cache-1d9g9l8 .st-emotion-cache-1d9g9l8, .st-emotion-cache-0 .st-emotion-cache-0,
-    .st-emotion-cache-1v4f50 .st-emotion-cache-1v4f50, .st-emotion-cache-1n743z1 .st-emotion-cache-1n743z1 {{
+    /* Remover card-style do container de KPIs para não duplicar */
+    .st-emotion-cache-1d9g9l8 .st-emotion-cache-1d9g9l8 {{
         background: transparent;
         border: none;
         padding: 0;
@@ -153,41 +143,36 @@ def get_dynamic_css() -> str:
         box-shadow: none;
     }}
 
-    /* Ajustar o container que envolve os KPIs, removendo o estilo de card nele (para não ficar aninhado) */
-    .st-emotion-cache-1d9g9l8:has(.kpi-card) {{
-        background: transparent;
-        border: none;
-        padding: 0;
-        margin-bottom: 0;
-        box-shadow: none;
+
+    /* Ajusta sub-cabeçalhos dentro do card */
+    .st-emotion-cache-1v4f50 h3, .st-emotion-cache-1n743z1 h3 {{
+        margin-top: 0;
+        margin-bottom: 1rem;
     }}
 
-    /* CORRIGIDO: Fundo dos Gráficos (Plotly) */
-    /* Define um fundo SÓLIDO para a área de plotagem, usando a cor secundária do tema */
-    .modebar, .plotly, .js-plotly-plot, .plotly-container {{
-      background-color: var(--st-bgs2) !important;
-      border-radius: 10px; /* Arredonda o fundo do gráfico */
-    }}
-    .js-plotly-plot {{ 
-        overflow: hidden; 
+    /* Remove fundo de gráficos PLOTLY (para o fundo do card aparecer) */
+    .modebar, .plotly, .js-plotly-plot {{
+      background-color: rgba(0,0,0,0) !important;
     }}
 
     /* ------------------------------------------------------------------- */
-    /* 4. Estilos de KPI (MANTIDOS COM CORREÇÃO DE COR) */
+    /* 4. Estilos de KPI (Ajuste Final para Cores) */
     /* ------------------------------------------------------------------- */
 
     .kpi-card {{
       background: var(--st-bgs2); 
       border: 1px solid var(--st-bgs3);
-      border-radius: 12px; /* Borda arredondada também no KPI */
+      border-radius: 8px;
       padding: 12px 14px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Sombra suave */
+      box-shadow: none;
       width: 100%;
       height: 120px; 
       display: flex; 
       flex-direction: column;
       justify-content: space-between; 
       overflow: hidden; 
+      /* Correção: Remover box-shadow dos KPIs para manter a consistência com o estilo do card */
+      box-shadow: none;
     }}
     .kpi-label, .kpi-delta {{ 
         color: var(--st-font-color-weak); 
@@ -196,10 +181,12 @@ def get_dynamic_css() -> str:
     .kpi-value {{ 
         font-size: 26px; 
         font-weight:700; 
+        /* Corrigido: Aplicar a cor dinâmica via style inline no HTML */
     }}
 
     /* Footer */
     footer {{ color: var(--st-font-color-weak); text-align:center; padding-top:10px; }}
+    </style>
     """
     return f"<style>{css_vars}</style>"
 
@@ -207,6 +194,8 @@ st.set_page_config(page_title="Dashboard Financeiro Caec", layout="wide", initia
                    menu_items={"About": "Dashboard Financeiro Caec © 2025"})
 
 # -------------------- UTILITÁRIOS E PRÉ-PROCESSAMENTO (MANTIDOS) --------------------
+# ... (Funções de parsing, formatação, gspread, preprocess_df, load_and_preprocess_data mantidas)
+# ... (Inclua aqui todas as funções que estavam acima)
 
 def parse_val_str_to_float(val) -> float:
     if pd.isna(val) or val == "": return 0.0
@@ -319,6 +308,8 @@ def load_and_preprocess_data() -> Tuple[pd.DataFrame, bool]:
     df_processed = preprocess_df(df_raw)
     return df_processed, header_mismatch
 
+# -------------------- FUNÇÕES DE FILTRO (MANTIDAS) --------------------
+
 def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
     f = df.copy()
     if filters.get("mode") == "range":
@@ -332,11 +323,11 @@ def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
         f = f[f["CATEGORIA"].isin(cats)]
     return f.reset_index(drop=True)
 
-# -------------------- PLOTS (AJUSTADOS) --------------------
+# -------------------- PLOTS (MANTIDOS) --------------------
+# ... (Funções de plotagem mantidas, como plot_saldo_acumulado, plot_fluxo_diario, etc.)
 
 def _get_empty_fig(text: str = "Sem dados") -> go.Figure:
     fig = go.Figure()
-    # Garante que o fundo do Plotly seja transparente para que o fundo do card CSS funcione
     fig.add_annotation(text=text, xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False, font=dict(color="var(--st-font-color-weak)"))
     fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=DEFAULT_CHART_HEIGHT)
     return fig
@@ -356,7 +347,6 @@ def plot_saldo_acumulado(df: pd.DataFrame) -> go.Figure:
         y_pred = reg.predict(X_line)
         dates_line = [datetime.fromordinal(int(x)) for x in X_line.flatten()]
         fig.add_trace(go.Scatter(x=dates_line, y=y_pred, mode="lines", name="Tendência", line=dict(color=COLORS["trend"], dash="dash")))
-    # Fundo transparente para herdar do card
     fig.update_layout(height=DEFAULT_CHART_HEIGHT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     fig.update_xaxes(title_text="Data")
     fig.update_yaxes(title_text="Saldo (R$)")
@@ -368,7 +358,6 @@ def plot_fluxo_diario(df: pd.DataFrame) -> go.Figure:
     fluxo["DATA"] = pd.to_datetime(fluxo["DATA"])
     cores = [COLORS["receita"] if v >= 0 else COLORS["despesa"] for v in fluxo["VALOR_NUM"]]
     fig = go.Figure(go.Bar(x=fluxo["DATA"], y=fluxo["VALOR_NUM"], marker_color=cores))
-    # Fundo transparente para herdar do card
     fig.update_layout(height=DEFAULT_CHART_HEIGHT, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     fig.update_xaxes(title_text="Data")
     fig.update_yaxes(title_text="Valor (R$)")
@@ -382,52 +371,58 @@ def plot_categoria_barras(df: pd.DataFrame, kind: str = "Receita", category_colo
     cats, vals = list(series.index), series.values
     marker_colors = [category_colors.get(c, COLORS["neutral"]) for c in cats]
     fig = go.Figure(go.Bar(x=vals, y=cats, orientation='h', marker=dict(color=marker_colors)))
-    # Fundo transparente para herdar do card
     fig.update_layout(height=DEFAULT_CHART_HEIGHT-10, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                       title=f'{kind} por Categoria (Barras)') 
     fig.update_xaxes(title_text="Valor (R$)")
     fig.update_yaxes(title_text="Categoria")
     return fig
 
-def plot_categoria_barras_pct(df: pd.DataFrame, kind: str = "Receita", category_colors: Dict[str,str]=None) -> go.Figure:
-    """NOVO: Gráfico de barras verticais com porcentagem de composição."""
-    assert kind in ("Receita", "Despesa")
-    base = df[df["VALOR_NUM"] > 0] if kind == "Receita" else df[df["VALOR_NUM"] < 0]
-    if base.empty: return _get_empty_fig(f"Sem dados de {kind}")
+def plot_treemap_composicao(df: pd.DataFrame, kind: str = "Receita", category_colors: Dict[str,str]=None) -> go.Figure:
+    if kind == "Receita":
+        df_plot = df[df["VALOR_NUM"] > 0].groupby("CATEGORIA")["VALOR_NUM"].sum().reset_index()
+        df_plot.columns = ["CATEGORIA", "VALOR"]
+    else:
+        df_plot = df[df["VALOR_NUM"] < 0].groupby("CATEGORIA")["VALOR_NUM"].sum().abs().reset_index()
+        df_plot.columns = ["CATEGORIA", "VALOR"]
+        
+    if df_plot.empty:
+        return _get_empty_fig(f"Sem dados de {kind}")
+
+    df_plot['ID'] = df_plot['CATEGORIA']
+    df_plot['PARENT'] = "Total" 
+    total_valor = df_plot['VALOR'].sum()
+    df_plot['PORCENTAGEM'] = (df_plot['VALOR'] / total_valor) * 100 if total_valor > 0 else 0
     
-    df_plot = base["VALOR_NUM"].abs().groupby(base["CATEGORIA"]).sum().reset_index()
-    df_plot.columns = ["CATEGORIA", "VALOR"]
-    total = df_plot["VALOR"].sum()
-    df_plot["PERCENT"] = (df_plot["VALOR"] / total) * 100
-    df_plot = df_plot.sort_values("PERCENT", ascending=False)
+    df_total = pd.DataFrame([{'CATEGORIA': 'Total', 'VALOR': total_valor, 'ID': 'Total', 'PARENT': "", 'PORCENTAGEM': 100}])
+    df_combined = pd.concat([df_total, df_plot])
     
-    # Formatação do hover text
-    df_plot["HOVER_TEXT"] = df_plot.apply(
-        lambda row: f"**{row['CATEGORIA']}**<br>Valor: {money_fmt_br(row['VALOR'])}<br>% Total: {row['PERCENT']:.1f}%", axis=1
+    df_combined['HOVER_TEXT'] = df_combined.apply(
+        lambda row: f"**{row['CATEGORIA']}**<br>Valor: {money_fmt_br(row['VALOR'])}<br>% Total: {row['PORCENTAGEM']:.1f}%", axis=1
     )
     
-    marker_colors = [category_colors.get(c, COLORS["neutral"]) for c in df_plot["CATEGORIA"]]
+    fig = px.treemap(df_combined, 
+                     names='ID', 
+                     parents='PARENT', 
+                     values='VALOR',
+                     color='CATEGORIA',
+                     color_discrete_map=category_colors,
+                     custom_data=['HOVER_TEXT'])
 
-    fig = go.Figure(go.Bar(
-        x=df_plot["CATEGORIA"], 
-        y=df_plot["PERCENT"], 
-        marker_color=marker_colors,
-        hovertemplate="%{customdata}<extra></extra>",
-        customdata=df_plot["HOVER_TEXT"]
-    ))
-    
+    fig.update_traces(
+        root_color="lightgrey",
+        textinfo="label+percent entry",
+        hovertemplate="%{customdata[0]}<extra></extra>",
+        selector=dict(type='treemap')
+    )
+
     fig.update_layout(
         height=DEFAULT_CHART_HEIGHT, 
         paper_bgcolor="rgba(0,0,0,0)", 
         plot_bgcolor="rgba(0,0,0,0)",
-        title=f'Composição de {kind} (Porcentagem)',
-        xaxis_tickangle=-45
+        title=f'Composição de {kind} (Treemap)',
+        margin=dict(t=50, b=10, l=10, r=10)
     )
-    fig.update_xaxes(title_text="Categoria")
-    fig.update_yaxes(title_text="Porcentagem (%)", ticksuffix="%")
     return fig
-
-# Removemos a função plot_treemap_composicao
 
 def plot_bubble_transacoes_categoria_y(df: pd.DataFrame, category_colors: Dict[str,str]=None) -> go.Figure:
     if df.empty: return _get_empty_fig("Sem transações")
@@ -513,6 +508,7 @@ def plot_boxplot_by_category(df: pd.DataFrame) -> go.Figure:
     return fig
 
 # -------------------- SIDEBAR E FILTROS (MANTIDOS) --------------------
+# ... (Função sidebar_filters_and_controls mantida)
 
 def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
     st.sidebar.title("Dashboard Financeiro Caec")
@@ -555,7 +551,7 @@ def sidebar_filters_and_controls(df: pd.DataFrame) -> Tuple[str, Dict]:
     st.sidebar.caption("Criado e administrado pela diretoria de Administração Comercial e Financeiro — by Rick")
     return page, filters
 
-# -------------------- KPIS (MANTIDOS) --------------------
+# -------------------- KPIS (AJUSTADO PARA A COR DO VALOR PRINCIPAL) --------------------
 
 def _sum_period(df: pd.DataFrame, start_dt: datetime, end_dt: datetime, tipo: str = "all") -> float:
     if df.empty: return 0.0
@@ -576,6 +572,9 @@ def _kpi_delta_text_and_color(curr: float, prev: float, positive_is_good: bool =
     return txt, delta_color
 
 def _render_kpi_card_html(title: str, value: str, delta: str, value_color_css_var: str, delta_color: str):
+    """
+    Renderiza o card KPI. value_color_css_var agora é o nome da variável CSS (--kpi-receita, --kpi-despesa, etc.).
+    """
     arrow = "—"
     arrow_color = "var(--st-font-color-weak)"
     if delta_color == "normal":
@@ -585,6 +584,7 @@ def _render_kpi_card_html(title: str, value: str, delta: str, value_color_css_va
         arrow = "▼"
         arrow_color = "var(--kpi-despesa)"
     
+    # CORRIGIDO: O valor principal agora usa a variável CSS de cor (value_color_css_var)
     html = f"""
     <div class="kpi-card">
       <div class="kpi-label">{title}</div>
@@ -647,6 +647,7 @@ def render_kpi_cards(df_full: pd.DataFrame, df_filtered: pd.DataFrame):
         )
 
 # -------------------- TABELA / EXPORT (MANTIDOS) --------------------
+# ... (Funções render_table e _prepare_export_csv mantidas)
 
 def render_table(df: pd.DataFrame, key: str):
     if df.empty:
@@ -663,18 +664,15 @@ def _prepare_export_csv(df: pd.DataFrame) -> str:
     return export_df.to_csv(index=False, encoding="utf-8-sig")
 
 
-# -------------------- MAIN FUNCTION --------------------
+# -------------------- MAIN FUNCTION (AJUSTADO COM CARDS) --------------------
 
 def main():
-    # CORRIGIDO: Injeção de CSS no topo
     st.markdown(get_dynamic_css(), unsafe_allow_html=True)
-    
     st.title("Dashboard Financeiro Caec")
 
     try:
         df_full, header_mismatch = load_and_preprocess_data()
     except Exception as e:
-        # Mock data se a importação falhar
         mock_data = {
             "DATA": [datetime.now() - timedelta(days=d) for d in range(60)] * 2,
             "TIPO": ["Receita"] * 60 + ["Despesa"] * 60,
@@ -717,41 +715,36 @@ def main():
             st.subheader("Lançamentos Recentes (Últimos 10)")
             recent = df_filtered.sort_values("DATA", ascending=False).head(10)
             render_table(recent, key="table_recent_resumo")
-            st.markdown("---") 
             csv = _prepare_export_csv(df_filtered)
             st.download_button("Exportar CSV (Filtro Atual)", csv, file_name="caec_resumo_export.csv", mime="text/csv", key="download_resumo")
 
 
     else:
-        # Garante que o container de tabs use o estilo de card
         tab_normais, tab_avancados, tab_tabela = st.tabs(["📊 Gráficos Principais", "📈 Análise Avançada", "📋 Tabela Completa"])
-        
         with tab_normais:
             
-            # CARD 1.1 e 1.2: Barras de Valores (Mantidas)
+            # CARD 1: Barras de Composição e Treemap
             with st.container():
-                st.markdown("### 💰 Composição Financeira por Categoria (Valores Absolutos)")
+                st.markdown("### 💰 Composição Financeira por Categoria")
                 col1, col2 = st.columns(2)
                 with col1:
                     st.plotly_chart(plot_categoria_barras(df_filtered, kind="Receita", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_rec_bar_comb")
                 with col2:
                     st.plotly_chart(plot_categoria_barras(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_dep_bar_comb")
 
-            # CARD 2.1 e 2.2: Barras de Porcentagem (NOVO: Substitui Treemap)
             with st.container():
-                st.markdown("### 📈 Composição Financeira por Categoria (Porcentagem)")
                 col3, col4 = st.columns(2)
                 with col3:
-                    st.plotly_chart(plot_categoria_barras_pct(df_filtered, kind="Receita", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_rec_bar_pct")
+                    st.plotly_chart(plot_treemap_composicao(df_filtered, kind="Receita", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_treemap_rec_comb")
                 with col4:
-                    st.plotly_chart(plot_categoria_barras_pct(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_dep_bar_pct")
+                    st.plotly_chart(plot_treemap_composicao(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_treemap_dep_comb")
 
-            # CARD 3: Visão Temporal Categoria Y
+            # CARD 2: Visão Temporal Categoria Y
             with st.container():
                 st.subheader("Visão Temporal de Lançamentos (por Categoria)")
                 st.plotly_chart(plot_bubble_transacoes_categoria_y(df_filtered, category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_bubble_cat_y")
 
-            # CARD 4: Visão Detalhada Valor Y
+            # CARD 3: Visão Detalhada Valor Y
             with st.container():
                 st.subheader("Visão Detalhada de Transações")
                 st.plotly_chart(plot_bubble_transacoes_valor_y(df_filtered, category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_bubble_valor_y")
@@ -760,12 +753,12 @@ def main():
             
             # CARD 1: Candlestick
             with st.container():
-                agg_freq = st.selectbox("Agregação Candlestick", options=[("Diário","D"), ("Semanal","W"), ("Mensal","M")], format_func=lambda x: x[0], key="sb_candle_freq_adv")
+                agg_freq = st.selectbox("Agregação Candlestick", options=[("Diário","D"), ("Semanal","W"), ("Mensal","M")], format_func=lambda x: x[0], key="sb_candle_freq")
                 freq_code = agg_freq[1]
                 st.subheader(f"Análise Candlestick ({agg_freq[0]}) e Volume")
                 st.plotly_chart(plot_candlestick(df_filtered, freq=freq_code), use_container_width=True, config={'displayModeBar': False}, key=f"chart_candlestick_{freq_code}")
 
-            # CARD 2.1 e 2.2: Fluxo/SMA e Boxplot
+            # CARD 2: Fluxo/SMA e Boxplot
             col1, col2 = st.columns(2)
             with col1:
                 with st.container():
@@ -794,7 +787,6 @@ def main():
             with st.container():
                 st.subheader("Todos os Lançamentos (Filtro Atual)")
                 render_table(df_filtered, key="table_full_detalhado")
-                st.markdown("---") 
                 csv = _prepare_export_csv(df_filtered)
                 st.download_button("Exportar CSV (Filtro Atual)", csv, file_name="caec_full_export.csv", mime="text/csv", key="download_full")
 
