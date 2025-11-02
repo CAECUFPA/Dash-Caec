@@ -1,5 +1,5 @@
 """
-Dashboard Financeiro Caec — Versão FINAL #2: KPIs Responsivos, Blueprint Visível, Sidebar Transparente e Stacked Bar Chart.
+Dashboard Financeiro Caec — Versão FINAL: Light Mode, Glassmorphism, Treemap.
 Paleta institucional e fontes aplicadas.
 """
 
@@ -25,7 +25,7 @@ except ImportError:
         @staticmethod
         def from_json_keyfile_dict(a, b): return None
 
-# -------------------- CONFIGURAÇÃO GERAL E CSS CORRIGIDO (Blueprint + Sidebar + KPIs) --------------------
+# -------------------- CONFIGURAÇÃO GERAL E CSS CORRIGIDO (Glassmorphism + Blueprint Light/Dark) --------------------
 
 EXPECTED_COLS = ["DATA", "TIPO", "CATEGORIA", "DESCRIÇÃO", "VALOR", "OBSERVAÇÃO"]
 
@@ -45,11 +45,11 @@ COLORS = {
 
 DEFAULT_CHART_HEIGHT = 360
 
-# NOVO BLUEPRINT: Aumentando a opacidade das linhas para 0.6 (de 0.4) para mais visibilidade
+# Blueprint: Opacidade de 0.8 para visibilidade clara em ambos os temas.
 BLUEPRINT_BACKGROUND_CSS = """
   background-image:
-    linear-gradient(0deg, var(--bg-line-rgba-06) 1px, transparent 1px),
-    linear-gradient(90deg, var(--bg-line-rgba-06) 1px, transparent 1px);
+    linear-gradient(0deg, var(--bg-line-rgba-08) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bg-line-rgba-08) 1px, transparent 1px);
   background-size: 20px 20px;
   background-position: -1px -1px;
 """
@@ -62,7 +62,7 @@ MINIMAL_CSS = f"""
 @import url('https://fonts.googleapis.com/css2?family=Anton&family=Six+Caps&family=League+Spartan&family=Open+Sans:wght@400;700&display=swap');
 
 /* ------------------------------------------------------------------- */
-/* 1. VARIÁVEIS DE TEMA (CORRIGIDAS PARA RGBA MAIS FORTE) */
+/* 1. VARIÁVEIS DE TEMA (COMPLETAS PARA LIGHT/DARK) */
 /* ------------------------------------------------------------------- */
 
 :root {{
@@ -72,13 +72,17 @@ MINIMAL_CSS = f"""
   --kpi-despesa: {COLORS['despesa']};
   --kpi-saldo: {COLORS['saldo']};
 
-  /* Modo CLARO */
+  /* Modo CLARO (Padrão) */
   --bg-main: {INSTITUTIONAL['branco']};
   --bg-secondary: #f0f2f6; 
   --text-main: {INSTITUTIONAL['preto']};
   --text-secondary: #6c757d;
   --card-border: #e0e0e0;
-  --bg-line-rgba-06: rgba(224, 224, 224, 0.6); /* Linhas CLARAS ainda mais visíveis */
+  --bg-line-rgba-08: rgba(200, 200, 200, 0.8); /* Linhas CLARAS muito visíveis */
+
+  /* Glassmorphism (Claro) */
+  --sidebar-bg: rgba(255, 255, 255, 0.2); 
+  --sidebar-border: rgba(224, 224, 224, 0.5); 
 }}
 
 /* Modo ESCURO */
@@ -89,7 +93,11 @@ MINIMAL_CSS = f"""
         --text-main: #e6e6e6;
         --text-secondary: #bfc9d3;
         --card-border: #2c3641;
-        --bg-line-rgba-06: rgba(44, 54, 65, 0.6); /* Linhas ESCURAS ainda mais visíveis */
+        --bg-line-rgba-08: rgba(44, 54, 65, 0.8); /* Linhas ESCURAS muito visíveis */
+
+        /* Glassmorphism (Escuro) */
+        --sidebar-bg: rgba(11, 20, 26, 0.6); 
+        --sidebar-border: rgba(44, 54, 65, 0.8);
     }}
 }}
 
@@ -110,21 +118,22 @@ h1, h2, h3, h4, .st-emotion-cache-e67m5x, .kpi-value {{
     color: var(--caec-azul);
 }}
 
-/* Sidebar - Fundo transparente (CORRIGIDO) */
-/* Usando o seletor mais genérico para a sidebar e garantindo !important */
-.st-emotion-cache-vk34a3, .st-emotion-cache-1d371w8, .st-emotion-cache-1cypk8n {{ /* Adicionado 1d371w8 */
-    background-color: transparent !important;
-    border-right: none !important; 
+/* Sidebar - Glassmorphism (CORRIGIDO) */
+.st-emotion-cache-vk34a3, .st-emotion-cache-1d371w8, .st-emotion-cache-1cypk8n {{ 
+    background-color: var(--sidebar-bg) !important;
+    backdrop-filter: blur(10px); /* Efeito de vidro */
+    -webkit-backdrop-filter: blur(10px); /* Suporte para Webkit */
+    border-right: 1px solid var(--sidebar-border) !important; 
 }}
 
-/* Sidebar texto */
+/* Sidebar texto - Garante que o texto fique legível sobre o blur */
 .st-emotion-cache-1cypk8n, .st-emotion-cache-1cypk8n *, .st-emotion-cache-1d371w8, .st-emotion-cache-1d371w8 * {{
-    color: var(--text-main);
+    color: var(--text-main) !important; 
     font-family: 'Open Sans', sans-serif; 
 }}
 
 /* ------------------------------------------------------------------- */
-/* 3. ESTILOS DE KPI (CORRIGIDO PARA RESPONSIVIDADE) */
+/* 3. ESTILOS DE KPI (Responsividade garantida por overflow/flexbox) */
 /* ------------------------------------------------------------------- */
 
 .kpi-card {{
@@ -138,21 +147,21 @@ h1, h2, h3, h4, .st-emotion-cache-e67m5x, .kpi-value {{
   display: flex; 
   flex-direction: column;
   justify-content: space-between; 
-  overflow: hidden; /* Garante que nada transborde */
+  overflow: hidden; 
 }}
 .kpi-label {{ 
     font-size: 13px; 
     color: var(--text-secondary); 
     margin-bottom:auto; 
-    white-space: nowrap; /* Impede quebra de linha no label */
-    overflow: hidden; /* Esconde se transbordar */
-    text-overflow: ellipsis; /* Adiciona '...' se escondido */
+    white-space: nowrap; 
+    overflow: hidden;
+    text-overflow: ellipsis; 
 }}
 .kpi-value {{ 
     font-size: 26px; 
     font-weight:700; 
     margin-top: 4px; 
-    white-space: nowrap; /* Impede quebra de linha no valor */
+    white-space: nowrap; 
     overflow: hidden;
     text-overflow: ellipsis;
 }}
@@ -163,7 +172,7 @@ h1, h2, h3, h4, .st-emotion-cache-e67m5x, .kpi-value {{
     display:flex; 
     gap:8px; 
     align-items:center; 
-    white-space: nowrap; /* Impede quebra de linha no delta */
+    white-space: nowrap; 
     overflow: hidden;
     text-overflow: ellipsis;
 }}
@@ -302,7 +311,7 @@ def load_and_preprocess_data() -> Tuple[pd.DataFrame, bool]:
     df_processed = preprocess_df(df_raw)
     return df_processed, header_mismatch
 
-# -------------------- PLOTS (STACKED BAR NO LUGAR DO DONUT) --------------------
+# -------------------- PLOTS (TREEMAP RESTITUIDO) --------------------
 
 def _get_empty_fig(text: str = "Sem dados") -> go.Figure:
     fig = go.Figure()
@@ -355,8 +364,8 @@ def plot_categoria_barras(df: pd.DataFrame, kind: str = "Receita", category_colo
     fig.update_yaxes(title_text="Categoria")
     return fig
 
-# NOVO: Gráfico de Barras Empilhadas para Composição
-def plot_stacked_bar_composicao(df: pd.DataFrame, kind: str = "Receita", category_colors: Dict[str,str]=None) -> go.Figure:
+# TREEMAP RESTITUIDO
+def plot_treemap_composicao(df: pd.DataFrame, kind: str = "Receita", category_colors: Dict[str,str]=None) -> go.Figure:
     if kind == "Receita":
         df_plot = df[df["VALOR_NUM"] > 0].groupby("CATEGORIA")["VALOR_NUM"].sum().reset_index()
         df_plot.columns = ["CATEGORIA", "VALOR"]
@@ -367,33 +376,42 @@ def plot_stacked_bar_composicao(df: pd.DataFrame, kind: str = "Receita", categor
     if df_plot.empty:
         return _get_empty_fig(f"Sem dados de {kind}")
 
-    # Calcula porcentagens para hover text
+    df_plot['ID'] = df_plot['CATEGORIA']
+    df_plot['PARENT'] = "Total" # Pai comum para Treemap
     total_valor = df_plot['VALOR'].sum()
     df_plot['PORCENTAGEM'] = (df_plot['VALOR'] / total_valor) * 100 if total_valor > 0 else 0
+    
+    # Adicionar o nó "Total"
+    df_total = pd.DataFrame([{'CATEGORIA': 'Total', 'VALOR': total_valor, 'ID': 'Total', 'PARENT': "", 'PORCENTAGEM': 100}])
+    df_combined = pd.concat([df_total, df_plot])
+    
+    # Custom hovertext
+    df_combined['HOVER_TEXT'] = df_combined.apply(
+        lambda row: f"**{row['CATEGORIA']}**<br>Valor: {money_fmt_br(row['VALOR'])}<br>% Total: {row['PORCENTAGEM']:.1f}%", axis=1
+    )
+    
+    fig = px.treemap(df_combined, 
+                     names='ID', 
+                     parents='PARENT', 
+                     values='VALOR',
+                     color='CATEGORIA',
+                     color_discrete_map=category_colors,
+                     custom_data=['HOVER_TEXT'])
 
-    fig = px.bar(df_plot, 
-                 x='VALOR', 
-                 y=px.Constant("Composição"), # Eixo Y constante para empilhar
-                 color='CATEGORIA',
-                 orientation='h',
-                 color_discrete_map=category_colors,
-                 text_auto='.1s', # Exibe o valor ou porcentagem automaticamente
-                 hover_data={'CATEGORIA':True, 'VALOR':':,.2f', 'PORCENTAGEM':':.1ff'}, # Detalhes no hover
-                 title=f'Composição de {kind} (Barras Empilhadas)')
+    fig.update_traces(
+        root_color="lightgrey",
+        textinfo="label+percent entry",
+        hovertemplate="%{customdata[0]}<extra></extra>", # Usar o hovertext customizado
+        selector=dict(type='treemap')
+    )
 
     fig.update_layout(
         height=DEFAULT_CHART_HEIGHT, 
         paper_bgcolor="rgba(0,0,0,0)", 
         plot_bgcolor="rgba(0,0,0,0)",
-        barmode='stack', # Garante que as barras sejam empilhadas
-        xaxis_title="Valor (R$)",
-        yaxis_title="", # Remove o título do eixo Y, pois é "Composição"
-        legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.05), # Legenda à direita
-        hovermode="x unified" # Melhor visualização do hover
+        title=f'Composição de {kind} (Treemap)',
+        margin=dict(t=50, b=10, l=10, r=10)
     )
-    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.15)')
-    fig.update_yaxes(showgrid=False) # Remove grid do eixo Y
-    fig.update_traces(textposition='inside', insidetextanchor='middle') # Centraliza texto dentro das barras
     return fig
 
 # Funções de análise avançada (mantidas)
@@ -703,12 +721,12 @@ def main():
             with col2:
                 st.plotly_chart(plot_categoria_barras(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_dep_bar_comb")
 
-            # Gráficos de Barras Empilhadas (Stacked Bar Chart) - NOVO
+            # Gráfico Treemap (RESTITUIDO)
             col3, col4 = st.columns(2)
             with col3:
-                st.plotly_chart(plot_stacked_bar_composicao(df_filtered, kind="Receita", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_stacked_rec_comb")
+                st.plotly_chart(plot_treemap_composicao(df_filtered, kind="Receita", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_treemap_rec_comb")
             with col4:
-                st.plotly_chart(plot_stacked_bar_composicao(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_stacked_dep_comb")
+                st.plotly_chart(plot_treemap_composicao(df_filtered, kind="Despesa", category_colors=category_colors), use_container_width=True, config={'displayModeBar': False}, key="chart_treemap_dep_comb")
 
             st.markdown("---")
             st.subheader("Visão Temporal de Lançamentos (por Categoria)")
