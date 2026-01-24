@@ -1,0 +1,16 @@
+# --- Framework e UI ---
+streamlit
+
+# --- Conexão com Google Sheets ---
+gspread
+oauth2client
+
+# --- Processamento de Dados ---
+pandas
+numpy
+
+# --- Visualização de Dados ---
+plotly
+
+# --- Utilitários ---
+typing-extensions>=4.8.0

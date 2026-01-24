@@ -1,0 +1,121 @@
+/* Palette Institucional Caec */
+:root {
+  --azul-caec: #042b51;
+  --azul-caec2: #2b649c;
+
+  --amarelo-caec: #f6d138;
+  --branco-caec: #ffffff;
+  --preto-caec: #231f20;
+  --fundo-deep: #030a11;
+  --verde-money: #a6e3a1;
+  --vermelho-alert: #f38ba8;
+  --azul-kpi: #89b4fa;
+}
+
+/* --- ESTRUTURA GLOBAL --- */
+.stApp {
+  background-color: var(--fundo-deep);
+}
+
+[data-testid="stSidebar"] {
+  background-color: var(--fundo-deep) !important;
+}
+
+/* Transparência nos Gráficos Plotly */
+div[data-testid="stPlotlyChart"] {
+  background-color: transparent !important;
+}
+
+/* --- CARDS DE KPI --- */
+.kpi-card {
+  padding: 1.5rem;
+  border-radius: 15px;
+  border-left: 5px solid var(--azul-caec);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
+  transition: transform 0.3s ease;
+  background-color: transparent;
+  /* Mantendo conforme sua última instrução */
+}
+
+.kpi-card:hover {
+  transform: translateY(-5px);
+}
+
+.kpi-label {
+  color: var(--amarelo-caec);
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  margin-bottom: 10px;
+}
+
+/* Cores dos Valores */
+.val-receita {
+  color: var(--verde-money);
+  font-size: 1.8rem;
+  font-weight: 900;
+}
+
+.val-despesa {
+  color: var(--vermelho-alert);
+  font-size: 1.8rem;
+  font-weight: 900;
+}
+
+.val-saldo {
+  color: var(--azul-kpi) !important;
+  /* Azul solicitado por você */
+  font-size: 1.8rem;
+  font-weight: 900;
+}
+
+/* Badges de Variação (Deltas) */
+.delta-box {
+  margin-top: 10px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  display: inline-block;
+}
+
+.delta-up {
+  background: rgba(166, 227, 161, 0.15);
+  color: var(--verde-money);
+}
+
+.delta-down {
+  background: rgba(243, 139, 168, 0.15);
+  color: var(--vermelho-alert);
+}
+
+.delta-text {
+  color: var(--branco-caec);
+  font-weight: normal;
+  opacity: 0.7;
+  margin-left: 4px;
+}
+
+/* --- WIDGETS E SELEÇÃO (MATA O VERMELHO) --- */
+
+/* Cor da bolinha do Radio (Analytics/Financeiro) */
+div[data-baseweb="radio"] div[checked="true"]>div {
+  background-color: var(--amarelo-caec) !important;
+}
+
+/* Borda do foco no Radio */
+div[data-baseweb="radio"] div[checked="true"] {
+  border-color: var(--amarelo-caec) !important;
+}
+
+/* Tags do multiselect (Azul com borda Amarela) */
+span[data-baseweb="tag"] {
+  background-color: var(--azul-caec) !important;
+  border: 1px solid var(--amarelo-caec) !important;
+  color: white !important;
+}
+
+/* Cor do texto geral na Sidebar */
+[data-testid="stSidebar"] .stMarkdown p {
+  color: var(--branco-caec);
+}

@@ -1,0 +1,29 @@
+# --- Python & Ambiente Virtual ---
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Streamlit (Configurações e Segredos) ---
+.streamlit/config.toml
+# NUNCA suba o secrets.toml para o GitHub
+.streamlit/secrets.toml
+
+# --- Dados e Logs ---
+*.csv
+*.xlsx
+*.log
+data/raw/
+data/processed/
+
+# --- IDEs (VS Code / PyCharm) ---
+.vscode/
+.idea/
+.DS_Store
+
+# --- Distribuição ---
+dist/
+build/
+*.egg-info
